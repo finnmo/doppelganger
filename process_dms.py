@@ -290,33 +290,27 @@ class MessageProcessor:
 
     def _prepare_regex(self):
         """Compile regex patterns for text processing"""
-        # Emoji pattern
+        # Updated emoji pattern
         self.emoji_pattern = re.compile(
             r"["
-            u"\U0001F600-\U0001F64F"  # emoticons
+            u"\U0001F1E0-\U0001F1FF"  # flags
             u"\U0001F300-\U0001F5FF"  # symbols & pictographs
+            u"\U0001F600-\U0001F64F"  # emoticons
             u"\U0001F680-\U0001F6FF"  # transport & map symbols
-            u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
-            u"\U00002500-\U00002BEF"  # Chinese/Japanese/Korean symbols
-            u"\U00002702-\U000027B0"
-            u"\U00002702-\U000027B0"
-            u"\U000024C2-\U0001F251"
-            u"\U0001f926-\U0001f937"
-            u"\U00010000-\U0010ffff"
-            u"\u2640-\u2642" 
-            u"\u2600-\u2B55"
-            u"\u200d"
-            u"\u23cf"
-            u"\u23e9"
-            u"\u231a"
-            u"\ufe0f"  # variation selector
-            u"\u3030"
-            "]+", flags=re.UNICODE)
+            u"\U0001F700-\U0001F77F"  # alchemical symbols
+            u"\U0001F780-\U0001F7FF"  # Geometric Shapes Extended
+            u"\U0001F800-\U0001F8FF"  # Supplemental Arrows-C
+            u"\U0001F900-\U0001F9FF"  # Supplemental Symbols and Pictographs
+            u"\U0001FA00-\U0001FA6F"  # Chess Symbols
+            u"\U0001FA70-\U0001FAFF"  # Symbols and Pictographs Extended-A
+            u"\U00002702-\U000027B0"  # Dingbats
+            u"\U000024C2-\U0001F251" 
+            u"\U0001F004-\U0001F0CF"
+            "]+", flags=re.UNICODE
+        )
         
-        # URL pattern
-        self.url_pattern = re.compile(
-            r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|'
-            r'[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
+        # URL pattern remains the same
+        self.url_pattern = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
 
     def _setup_nlp(self):
         """Initialize NLP components with progress tracking"""
@@ -350,7 +344,6 @@ class MessageProcessor:
                 raise
 
     def process_text(self, text: str) -> Dict:
-        """Enhanced text cleaning with proper encoding handling"""
         if not text:
             return {
                 'emoji_count': 0,
@@ -361,18 +354,20 @@ class MessageProcessor:
             }
 
         try:
-            # Fix 1: Handle mixed encodings properly
-            decoded = text.encode('latin-1', 'ignore').decode('utf-8', 'ignore')
-            # Fix 2: Normalize before unescaping
-            decoded = unicodedata.normalize('NFKC', decoded)
-            # Fix 3: Multiple unescape passes
-            decoded = html.unescape(html.unescape(decoded))
+            # Convert JSON-encoded UTF-8 bytes to proper emojis
+            decoded = text.encode('latin-1').decode('utf-8')
+        except UnicodeEncodeError:
+            decoded = text  # Fallback for non-latin-1 encodable text
         except Exception as e:
             logger.warning(f"Text decoding error: {str(e)}")
-            decoded = text.encode('utf-8', 'ignore').decode('utf-8', 'ignore')
+            decoded = text
 
-        # Remove remaining invalid characters
-        decoded = re.sub(r'[^\x00-\x7Fá-úÁ-ÚñÑ]', '', decoded)
+        # Normalize and clean the text
+        decoded = unicodedata.normalize('NFKC', decoded)
+        decoded = html.unescape(decoded)
+        
+        # Remove remaining non-printable characters
+        decoded = re.sub(r'[\x00-\x1F\x7F-\x9F]', '', decoded)
         
         words = decoded.split()
         return {
@@ -541,14 +536,12 @@ class ConversationAnalyzer:
         batch = []
         for sender, words in self.word_counts.items():
             for word, count in words.items():
-                if count >= 10:  # Apply threshold before writing
-                    batch.append(
-                        Point("aggregated_word_metrics")
-                            .tag("sender", sender)
-                            .tag("word", word)
-                            .field("count", count)
-                    )
-        
+                batch.append(
+                    Point("word_metrics")  # ← Must match measurement name
+                        .tag("sender", sender)
+                        .tag("word", word)
+                        .field("count", count)
+                )
         if batch:
             self.writer.write_batch(batch)
             logger.info(f"Flushed {len(batch)} word metrics (count >=10)")
@@ -822,6 +815,26 @@ def create_message_points(msg, dt, text_metrics, photos, videos):
         .field("count", 1)
         .time(dt)
     )
+
+    if 'reactions' in msg:
+    # Track total reactions per message
+        points.append(
+            Point("message_metrics")
+            .tag("sender", msg['sender_name'])
+            .field("reaction_count", len(msg['reactions']))
+            .time(dt)
+        )
+    
+        # Track individual reactions
+        for reaction in msg['reactions']:
+            points.append(
+                Point("reaction_metrics")
+                .tag("sender", msg['sender_name'])
+                .tag("reactor", sanitize_tag(reaction['actor']))
+                .tag("emoji", reaction['reaction'])
+                .field("count", 1)
+                .time(dt)
+            )
     
     # Main metrics
     points.append(
@@ -947,6 +960,9 @@ def get_conversation_name(folder_path: Path) -> str:
     # Replace underscores with spaces and title case
     return base_name.replace('_', ' ').title()
 
+def sanitize_tag(value: str) -> str:
+    """Clean tags for InfluxDB compatibility"""
+    return re.sub(r'[^\w]', '_', value.strip().lower())[:50]
 
 def main():
     """Main execution flow with single conversation selection"""

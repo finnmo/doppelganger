@@ -17,8 +17,13 @@
 
 ## 📥 Getting Your Instagram Data
 1. **Request Your Data**
-   - Go to Instagram Settings → Security → Download Data
-   - Enter your email and request "Complete copy"
+   - Go to Instagram Settings and activity → Your activity → Download Your Information
+   - → Download or transfer information
+   - Tick your instagram account → Next
+   - All available information → Download to device
+   - Pick your date range.
+   - Format: JSON
+   - → Create files
    - You'll receive a download link within 48 hours
 
 2. **Prepare the Data**

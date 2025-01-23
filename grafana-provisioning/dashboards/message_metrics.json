@@ -348,7 +348,7 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"doppelgnger\")\n  |> range(start: v.timeRangeStart)\n  |> filter(fn: (r) => r._measurement == \"message_metrics\" and r._field == \"media_count\")\n  |> group()\n  |> sum()",
+          "query": "from(bucket: \"doppelgnger\")\n  |> range(start: v.timeRangeStart)\n  |> filter(fn: (r) => r._measurement == \"message_metrics\")\n  |> filter(fn: (r) => r._field == \"photo_count\" or r._field == \"video_count\")\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({r with total_media: r.photo_count + r.video_count}))\n  |> group()\n  |> sum(column: \"total_media\")",
           "refId": "A"
         }
       ],
@@ -411,7 +411,7 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"doppelgnger\")\n  |> range(start: v.timeRangeStart)\n  |> filter(fn: (r) => r._measurement == \"message_metrics\" and r._field == \"media_count\")\n  |> sum()\n  |> group(columns: [\"sender\"])",
+          "query": "from(bucket: \"doppelgnger\")\n  |> range(start: v.timeRangeStart)\n  |> filter(fn: (r) => r._measurement == \"message_metrics\")\n  |> filter(fn: (r) => r._field == \"photo_count\" or r._field == \"video_count\")\n  |> pivot(rowKey: [\"_time\", \"sender\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({r with total_media: r.photo_count + r.video_count}))\n  |> group(columns: [\"sender\"])\n  |> sum(column: \"total_media\")\n  |> sort(columns: [\"total_media\"], desc: true)",
           "refId": "A"
         }
       ],
@@ -536,7 +536,7 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"doppelgnger\")\n  |> range(start: v.timeRangeStart)\n  |> filter(fn: (r) => r._measurement == \"reaction_metrics\")\n  |> group()\n  |> count()",
+          "query": "from(bucket: \"doppelgnger\")\n  |> range(start: v.timeRangeStart)\n  |> filter(fn: (r) => r._measurement == \"message_metrics\")\n  |> filter(fn: (r) => r._field == \"emoji_count\")\n  |> group(columns: [\"sender\"])\n  |> sum()\n  |> sort(columns: [\"_value\"], desc: true)",
           "refId": "A"
         }
       ],
@@ -828,7 +828,7 @@
         "x": 0,
         "y": 30
       },
-      "id": 26,
+      "id": 28,
       "options": {
         "legend": {
           "calcs": [],
@@ -837,7 +837,7 @@
           "showLegend": true
         },
         "tooltip": {
-          "mode": "single",
+          "mode": "multi",
           "sort": "none"
         }
       },
@@ -847,11 +847,11 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "import \"strings\"\nimport \"timezone\"\n\noption location = timezone.location(name: \"Australia/Perth\")\n\nfrom(bucket: \"doppelgnger\")\n  |> range(start: v.timeRangeStart)\n  |> filter(fn: (r) => r._measurement == \"message_count\")\n  |> aggregateWindow(\n    every: 1mo,\n    fn: sum\n  )\n  |> map(fn: (r) => ({\n      month: r._time,\n      month_display: strings.substring(v: string(v: r._time), start: 0, end: 7),\n      count: r._value\n  }))\n  |> sort(columns: [\"month\"], desc: false)",
+          "query": "from(bucket: \"doppelgnger\")\n  |> range(start: v.timeRangeStart)\n  |> filter(fn: (r) => r._measurement == \"message_count\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> group()  // Remove all groupings\n  |> aggregateWindow(\n    every: 1w,\n    fn: sum,\n    createEmpty: false\n  )\n  |> yield(name: \"total_messages\")",
           "refId": "A"
         }
       ],
-      "title": "Monthly Activity Patterns",
+      "title": "Messages Over Time",
       "type": "timeseries"
     },
     {
@@ -917,7 +917,7 @@
         "x": 12,
         "y": 30
       },
-      "id": 28,
+      "id": 26,
       "options": {
         "legend": {
           "calcs": [],
@@ -926,7 +926,7 @@
           "showLegend": true
         },
         "tooltip": {
-          "mode": "multi",
+          "mode": "single",
           "sort": "none"
         }
       },
@@ -936,11 +936,11 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "import \"timezone\"\n\noption location = timezone.location(name: \"Europe/London\") // Set your timezone\n\nfrom(bucket: \"doppelgnger\")\n  |> range(start: v.timeRangeStart)\n  |> filter(fn: (r) => r._measurement == \"message_count\")\n  |> aggregateWindow(\n    every: v.windowPeriod,\n    fn: (column, tables=<-) => tables |> sum(column: column),\n    createEmpty: true\n  )\n  |> map(fn: (r) => ({\n      time: r._time,\n      count: if exists r._value then r._value else 0\n  }))",
+          "query": "from(bucket: \"doppelgnger\")\n  |> range(start: v.timeRangeStart)\n  |> filter(fn: (r) => r._measurement == \"message_count\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> group(columns: [\"sender\"])  // Group only by sender\n  |> aggregateWindow(\n    every: 1w,\n    fn: sum,\n    createEmpty: false\n  )\n  |> yield(name: \"by_sender\")",
           "refId": "A"
         }
       ],
-      "title": "Messages Over Time",
+      "title": "Messages Over Time Per Person",
       "type": "timeseries"
     },
     {
@@ -1395,7 +1395,7 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"doppelgnger\")\n  |> range(start: v.timeRangeStart)\n  |> filter(fn: (r) => \n    r._measurement == \"word_metrics\" and\n    r._field == \"count\" and\n    exists r.word\n  )\n  |> group(columns: [\"word\"])\n  |> sum()\n  |> top(n: 50, columns: [\"_value\"])\n  |> group() \n  |> map(fn: (r) => ({\n      word: r.word,\n      count: r._value\n  }))",
+          "query": "from(bucket: \"doppelgnger\")\n  |> range(start: v.timeRangeStart)\n  |> filter(fn: (r) => \n    r._measurement == \"word_metrics\" and\n    r._field == \"count\" and\n    exists r.word and\n    r.word != \"\"  // Filter empty words\n  )\n  |> group(columns: [\"word\"])\n  |> sum()\n  |> filter(fn: (r) => r._value >= 10)  // Match Python threshold\n  |> top(n: 50, columns: [\"_value\"])\n  |> map(fn: (r) => ({\n      name: r.word,\n      value: r._value,\n      time: now()  // Word clouds often require time field\n  }))",
           "refId": "A"
         }
       ],
@@ -1485,16 +1485,22 @@
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
+            "mode": "thresholds"
           },
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
-          },
-          "mappings": []
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
         },
         "overrides": []
       },
@@ -1504,14 +1510,12 @@
         "x": 0,
         "y": 65
       },
-      "id": 77,
+      "id": 34,
       "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "pieType": "pie",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -1519,23 +1523,21 @@
           "fields": "",
           "values": false
         },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
+        "textMode": "auto"
       },
+      "pluginVersion": "9.3.6",
       "targets": [
         {
           "datasource": {
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"doppelgnger\")\n  |> range(start: v.timeRangeStart)\n  |> filter(fn: (r) => r._measurement == \"reaction_metrics\")\n  |> group(columns: [\"type\"])\n  |> count()\n  |> top(n: 5)",
+          "query": "from(bucket: \"doppelgnger\")\n  |> range(start: v.timeRangeStart)\n  |> filter(fn: (r) => r._measurement == \"conversation_gaps\" and r._value > 24)\n  |> group()\n  |> count()",
           "refId": "A"
         }
       ],
-      "title": "Reaction Types Used ",
-      "type": "piechart"
+      "title": "Conversation Gaps > 24hrs",
+      "type": "stat"
     },
     {
       "datasource": {
@@ -1570,7 +1572,7 @@
         "x": 12,
         "y": 65
       },
-      "id": 79,
+      "id": 77,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
@@ -1592,73 +1594,11 @@
             "type": "influxdb",
             "uid": "P951FEA4DE68E13C5"
           },
-          "query": "from(bucket: \"doppelgnger\")\n  |> range(start: v.timeRangeStart)\n  |> filter(fn: (r) => r._measurement == \"message_metrics\" and r._field == \"reaction_count\")\n  |> group()\n  |> mean()",
+          "query": "from(bucket: \"doppelgnger\")\n  |> range(start: v.timeRangeStart)\n  |> filter(fn: (r) => \n    r._measurement == \"reaction_metrics\" and \n    r._field == \"count\" and\n    exists r.emoji\n  )\n  |> group()\n  |> map(fn: (r) => ({r with all: \"total\"}))\n  |> sum()\n  |> group(columns: [\"all\"])\n  |> map(fn: (r) => ({total: r._value}))\n  // Remove intermediate yield to preserve stream context\n  |> join(\n    tables: {\n      left: this,  // Reference to current pipeline\n      right: (\n        from(bucket: \"doppelgnger\")\n          |> range(start: v.timeRangeStart)\n          |> filter(fn: (r) => \n            r._measurement == \"reaction_metrics\" and \n            r._field == \"count\" and\n            exists r.emoji\n          )\n          |> group(columns: [\"emoji\"])\n          |> map(fn: (r) => ({r with all: \"total\"}))\n          |> sum()\n      )\n    },\n    on: [\"all\"],\n    method: \"inner\"\n  )\n  |> map(fn: (r) => ({\n      reaction: r.emoji,\n      count: r._value_right,\n      percentage: (float(v: r._value_right) / float(v: r.total)) * 100.0\n  }))\n  |> sort(columns: [\"count\"], desc: true)\n  |> keep(columns: [\"reaction\", \"count\", \"percentage\"])\n  |> yield(name: \"final_results\")",
           "refId": "A"
         }
       ],
-      "title": "Reactions per Message",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "influxdb",
-        "uid": "P951FEA4DE68E13C5"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 73
-      },
-      "id": 34,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "9.3.6",
-      "targets": [
-        {
-          "datasource": {
-            "type": "influxdb",
-            "uid": "P951FEA4DE68E13C5"
-          },
-          "query": "from(bucket: \"doppelgnger\")\n  |> range(start: v.timeRangeStart)\n  |> filter(fn: (r) => r._measurement == \"conversation_gaps\" and r._value > 24)\n  |> group()\n  |> count()",
-          "refId": "A"
-        }
-      ],
-      "title": "Conversation Gaps > 24hrs",
+      "title": "Reaction Types Used ",
       "type": "stat"
     }
   ],
@@ -1702,6 +1642,6 @@
   "timezone": "",
   "title": "Message Metrics",
   "uid": "yC942qvHk",
-  "version": 9,
+  "version": 14,
   "weekStart": ""
 }
