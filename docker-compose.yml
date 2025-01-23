@@ -1,0 +1,54 @@
+version: '3.9'
+services:
+  influxdb:
+    image: influxdb:latest
+    ports:
+      - '8086:8086'
+    volumes:
+      - influxdb-storage:/var/lib/influxdb
+      - ./scripts:/scripts
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_USERNAME}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_PASSWORD}
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_ADMIN_TOKEN}
+      - INFLUXDB_HTTP_READ_TIMEOUT=30s
+      - INFLUXDB_HTTP_WRITE_TIMEOUT=30s
+      - INFLUXDB_HTTP_MAX_BODY_SIZE=25000000
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - '3001:3000'
+    volumes:
+      - ./grafana-storage:/var/lib/grafana
+      - ./grafana-provisioning/:/etc/grafana/provisioning/
+    depends_on:
+      - influxdb
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USERNAME}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_ADMIN_TOKEN}
+  process_dms:
+    build: .
+    depends_on:
+      - influxdb
+    volumes:
+      - .:/app
+    environment:
+      - INFLUX_URL=http://influxdb:8086
+      - INFLUXDB_ADMIN_TOKEN=${INFLUXDB_ADMIN_TOKEN}
+      - INFLUXDB_ORG=${INFLUXDB_ORG}
+      - INFLUXDB_BUCKET=${INFLUXDB_BUCKET}
+      - TEST_MODE=${TEST_MODE}
+volumes:
+  influxdb-storage:
+  grafana-storage:

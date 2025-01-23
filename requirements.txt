@@ -1,0 +1,11 @@
+pandas
+influxdb-client
+textblob
+matplotlib
+python-dotenv
+requests
+tqdm>=4.65.0
+tenacity
+questionary
+rich
+nltk
