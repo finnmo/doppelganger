@@ -70,8 +70,10 @@ export interface PersonaProfile {
   conversationVoices?: ConversationVoice[];
   bubbleHabits?: {
     avgBubblesPerTurn: number;
+    medianBubblesWhenMulti?: number;
     multiBubbleRate: number;
     sampleTurns: string[][];
+    contextualSamples?: Array<{ context: string; bubbles: string[] }>;
     styleSummary: string;
   } | null;
   turnTakingHabits?: {

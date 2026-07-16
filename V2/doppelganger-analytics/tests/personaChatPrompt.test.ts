@@ -213,4 +213,41 @@ describe('buildAnthropicPersonaRequest', () => {
       ])
     ).toThrow(/Last message must be from the user/);
   });
+
+  test('describes multi-bubble as conditional, not a forced default', () => {
+    const profile = mockProfile({
+      bubbleHabits: {
+        avgBubblesPerTurn: 2.8,
+        medianBubblesWhenMulti: 2,
+        multiBubbleRate: 0.65,
+        sampleTurns: [['yeah that sounds good', 'what time were you thinking?']],
+        contextualSamples: [
+          {
+            context: 'friday brunch?',
+            bubbles: ['yeah that sounds good', 'what time were you thinking?'],
+          },
+        ],
+        styleSummary:
+          'Alex splits into multiple texts on ~65% of turns. Use <<<BUBBLE>>> only when this reply naturally has separate chunks. Never pad with extra bubbles just to hit a rate.',
+      },
+      fewShotExamples: [
+        {
+          context: 'want coffee later?',
+          reply: 'sure',
+          conversationId: 'c1',
+          source: 'instagram',
+        },
+      ],
+    });
+
+    const { system } = buildAnthropicPersonaRequest(profile, [
+      { role: 'user', content: 'ok' },
+    ]);
+
+    expect(system).toContain('conditional');
+    expect(system).not.toContain('DEFAULT FORMAT');
+    expect(system).not.toContain('CRITICAL');
+    expect(system).toContain('Never pad');
+    expect(system).toContain('friday brunch');
+  });
 });

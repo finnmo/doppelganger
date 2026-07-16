@@ -55,9 +55,11 @@ export function buildTurnTakingHabits(
   let questions = 0;
   let doubleTexts = 0;
   let replyPairs = 0;
+  let replyQuestions = 0;
   let expands = 0;
   let compresses = 0;
   const latencies: number[] = [];
+  const followUpSamples: string[] = [];
 
   let prev: Row | null = null;
   for (const row of rows) {
@@ -89,6 +91,12 @@ export function buildTurnTakingHabits(
         const rw = wordCount(row.content);
         if (rw > pw * 1.15) expands += 1;
         if (rw < pw * 0.7) compresses += 1;
+        if (/\?/.test(row.content)) {
+          replyQuestions += 1;
+          if (followUpSamples.length < 8 && rw >= 3 && row.content.length <= 140) {
+            followUpSamples.push(row.content.trim());
+          }
+        }
         const lag = row.timestamp_ms - prev.timestamp_ms;
         if (lag > 0 && lag < 24 * 3600_000) latencies.push(lag);
       }
@@ -99,6 +107,8 @@ export function buildTurnTakingHabits(
   if (theirMsgs < 20) return null;
 
   const questionRate = Math.round((questions / theirMsgs) * 1000) / 1000;
+  const questionRateOnReplies =
+    replyPairs > 0 ? Math.round((replyQuestions / replyPairs) * 1000) / 1000 : questionRate;
   const doubleTextRate = Math.round((doubleTexts / theirMsgs) * 1000) / 1000;
   const expandsOnPartnerRate =
     replyPairs > 0 ? Math.round((expands / replyPairs) * 1000) / 1000 : 0;
@@ -111,17 +121,38 @@ export function buildTurnTakingHabits(
 
   const bits: string[] = [];
   bits.push(`Turn-taking habits for ${sender}:`);
+  // Use reply-turn question rate — raw message rate is diluted by acks/bubbles
   bits.push(
-    `asks a question in ~${Math.round(questionRate * 100)}% of messages` +
-      (questionRate >= 0.18
-        ? ' — often ask something back when chatting.'
-        : ' — do not force questions every turn.')
+    `when replying to someone, ~${Math.round(questionRateOnReplies * 100)}% of their reply turns include a question.`
   );
+  if (questionRateOnReplies >= 0.25) {
+    bits.push(
+      'In casual chat they fairly often tack on a follow-up question — do that when it fits this message, not every turn.'
+    );
+  } else if (questionRateOnReplies >= 0.12 || followUpSamples.length >= 2) {
+    bits.push(
+      'They sometimes ask a follow-up (~' +
+        Math.round(questionRateOnReplies * 100) +
+        '% of reply turns) — only when it fits, not as a default.'
+    );
+  } else {
+    bits.push(
+      'They are not frequent question-askers on reply turns — keep the thread going with a reaction or detail when needed, without forcing a question.'
+    );
+  }
+  if (followUpSamples.length) {
+    bits.push(
+      `Example follow-ups they have sent: ${followUpSamples
+        .slice(0, 4)
+        .map((s) => `“${s}”`)
+        .join(' · ')}`
+    );
+  }
   bits.push(
     `double-texts ~${Math.round(doubleTextRate * 100)}% of the time` +
       (doubleTextRate >= 0.15
-        ? ' — stacking short bubbles is normal for them.'
-        : ' — usually one bubble unless excited.')
+        ? ' — split only when the reply has separate thoughts; otherwise one bubble.'
+        : ' — usually one bubble unless a second thought clearly belongs alone.')
   );
   if (replyPairs >= 10) {
     if (expandsOnPartnerRate >= 0.35) {
@@ -129,7 +160,7 @@ export function buildTurnTakingHabits(
     } else if (compressesRate >= 0.4) {
       bits.push('Often replies shorter than the other person — punchy, not essays.');
     } else {
-      bits.push('Reply length usually tracks the other person\'s energy.');
+      bits.push("Reply length usually tracks the other person's energy.");
     }
   }
   if (avgReplyLatencyMs != null && avgReplyLatencyMs < 60_000) {
@@ -137,7 +168,7 @@ export function buildTurnTakingHabits(
   }
 
   return {
-    questionRate,
+    questionRate: questionRateOnReplies,
     doubleTextRate,
     expandsOnPartnerRate,
     compressesRate,

@@ -8,7 +8,7 @@ export interface ChatTurn {
 }
 
 const MAX_CONTEXT_CHARS = 320;
-const MAX_REPLY_CHARS = 450;
+const MAX_REPLY_CHARS = 550;
 const DEFAULT_MAX_EXAMPLES = 12;
 const MAX_MEMORIES = 8;
 
@@ -28,35 +28,56 @@ function wordCount(text: string): number {
 /** Prefer engaged replies over one-word dead-ends when the live message has substance. */
 function exampleSubstanceBonus(query: string, example: PersonaFewShotExample): number {
   const qWords = wordCount(query);
-  const rWords = wordCount(example.reply);
+  const rWords = wordCount(example.reply.replace(/<<<BUBBLE>>>/g, ' '));
   if (qWords <= 2) return 0;
   if (ULTRA_SHORT_ACK.test(example.reply.trim())) return -0.8;
-  if (rWords >= 8) return 0.45;
-  if (rWords >= 4) return 0.2;
-  return -0.15;
+  let score = 0;
+  // Do NOT boost multi-bubble or "?" — that invents habits. Similarity should drive format.
+  if (rWords >= 8) score += 0.45;
+  else if (rWords >= 4) score += 0.2;
+  else score -= 0.15;
+  return score;
 }
 
 function engagementGuidance(profile: PersonaProfile): string {
-  const withYouAvg = profile.relationshipCard?.avgWordsWithYou;
-  const avg = withYouAvg ?? profile.vocabulary?.avgWordsPerMessage ?? 6;
-  const low = Math.max(5, Math.round(avg));
-  const high = Math.max(low + 8, Math.round(avg * 4));
   const withPerson = profile.relationshipCard?.withPerson;
-  return [
+  const parts: string[] = [
+    `When there is something to say, write a natural engaged reply — not a clipped “ok / lol / idk” shutdown.`,
+  ];
+
+  parts.push(
     withPerson
-      ? `Length target with ${withPerson}: when there is something to say, write about ${low}–${high} words (or 1–3 short text bubbles) — not a clipped “ok / lol / idk” shutdown.`
-      : `Length target: when there is something to say, write about ${low}–${high} words (or 1–3 short text bubbles) — not a clipped “ok / lol / idk” shutdown.`,
-    `They do send short acks sometimes, but only when the other person sent something that warrants a quick ack. If the other person is chatting, sharing, asking, or joking — engage: react, add a thought, ask something back, or continue the thread.`,
-  ].join(' ');
+      ? `With ${withPerson}: match how they actually text this person — react and continue the thread when they would, without forcing questions or extra bubbles.`
+      : `Match how they actually text — react and continue the thread when they would, without forcing questions or extra bubbles.`
+  );
+  parts.push(
+    `Short acks are fine when the other person sent something that warrants a quick ack.`
+  );
+  return parts.join(' ');
+}
+
+/** Contextual multi-bubble pairs (partner message → their real split reply). */
+function bubbleFewShotExamples(profile: PersonaProfile): PersonaFewShotExample[] {
+  const samples = profile.bubbleHabits?.contextualSamples ?? [];
+  if (samples.length > 0) {
+    return samples.slice(0, 6).map((s, i) => ({
+      context: s.context,
+      reply: s.bubbles.join(' <<<BUBBLE>>> '),
+      conversationId: `bubble-ctx-${i}`,
+      source: 'derived',
+      withYou: true,
+    }));
+  }
+  return [];
 }
 
 function examplePool(profile: PersonaProfile): PersonaFewShotExample[] {
+  const bubbles = bubbleFewShotExamples(profile);
   const withYou = (profile.withYouFewShotExamples ?? []).map((e) => ({ ...e, withYou: true as const }));
   const general = profile.fewShotExamples ?? [];
-  // Dedupe by context+reply; prefer withYou copies
   const seen = new Set<string>();
   const out: PersonaFewShotExample[] = [];
-  for (const e of [...withYou, ...general]) {
+  for (const e of [...withYou, ...bubbles, ...general]) {
     const key = `${e.context}::${e.reply}`;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -242,12 +263,15 @@ export function buildAnthropicPersonaRequest(
   }
 
   if (profile.bubbleHabits?.styleSummary) {
-    systemParts.push('', 'Multi-bubble habit:', profile.bubbleHabits.styleSummary);
-    if (profile.bubbleHabits.sampleTurns?.length) {
+    systemParts.push('', 'Multi-bubble habit (conditional — not a quota):', profile.bubbleHabits.styleSummary);
+    const ctx = profile.bubbleHabits.contextualSamples?.slice(0, 2) ?? [];
+    if (ctx.length) {
       systemParts.push(
-        'Examples of their real multi-bubble turns (each line was a separate text):',
-        ...profile.bubbleHabits.sampleTurns.slice(0, 3).map((turn, i) => {
-          return `${i + 1}. ${turn.map((b) => `“${b}”`).join(' <<<BUBBLE>>> ')}`;
+        'When they DID split (partner → their bubbles) — only for similar situations:',
+        ...ctx.map((s, i) => {
+          return `${i + 1}. Them hearing “${s.context.slice(0, 120)}” → ${s.bubbles
+            .map((b) => `“${b}”`)
+            .join(' <<<BUBBLE>>> ')}`;
         })
       );
     }
@@ -264,13 +288,14 @@ export function buildAnthropicPersonaRequest(
   systemParts.push(
     '',
     'Rules:',
-    '- Keep the conversation alive the way they would — react, riff, ask, share. Do not sound avoidant or eager to end the chat.',
-    '- Match the energy of the latest message. A joke gets a joke/reaction; a question gets a real answer; a story gets a real response.',
-    '- Prefer a natural texting reply over a one-liner closer. One-word replies only when that is clearly how they would respond to this exact message.',
-    '- When sending multiple short texts, separate each bubble with exactly <<<BUBBLE>>> (no other labels).',
+    '- Stay in character and match the energy of the latest message.',
+    '- Prefer accuracy over engagement theater: do not force follow-up questions or multi-bubble splits.',
+    '- Use multiple short texts with <<<BUBBLE>>> only when the similar few-shots (or their real habit for this kind of message) show a split. Otherwise one bubble.',
+    '- Never pad with extra bubbles or filler questions just to seem chatty.',
+    '- One-word replies only when that is clearly how they would respond to this exact message.',
     '- Use remembered facts when relevant. If something is unknown, answer in a normal human way without inventing detailed false memories — do not dodge with “idk” every time.',
     '- Never mention that you are an AI or that you are role-playing.',
-    '- Reply with only the message text they would send — no quotes, labels, or stage directions (except <<<BUBBLE>>> between bubbles).',
+    '- Reply with only the message text they would send — no quotes, labels, or stage directions (except <<<BUBBLE>>> between bubbles when splitting).',
   );
 
   if (memories.length > 0) {

@@ -48,6 +48,27 @@ describe('bubbleHabits', () => {
     expect(habits!.multiBubbleRate).toBeGreaterThan(0.5);
     expect(habits!.avgBubblesPerTurn).toBeGreaterThan(1.5);
     expect(habits!.styleSummary).toContain('<<<BUBBLE>>>');
+    expect(habits!.styleSummary).toMatch(/only when|Never pad/i);
+  });
+
+  test('captures contextual partner → multi-bubble samples', () => {
+    const insert = db.prepare(
+      `INSERT INTO messages (conversation_id, sender, content, timestamp_ms) VALUES (?, ?, ?, ?)`
+    );
+    let t = 1_000_000;
+    for (let i = 0; i < 15; i++) {
+      insert.run('c1', 'Sam', `want to go friday ${i}?`, t);
+      t += 10_000;
+      insert.run('c1', 'Alex', `yeah friday works ${i}`, t);
+      t += 5_000;
+      insert.run('c1', 'Alex', `what time ${i}?`, t);
+      t += 120_000;
+    }
+
+    const habits = buildBubbleHabits(db, 'Alex');
+    expect(habits!.contextualSamples.length).toBeGreaterThan(0);
+    expect(habits!.contextualSamples[0].context).toMatch(/friday/i);
+    expect(habits!.contextualSamples[0].bubbles.length).toBe(2);
   });
 
   test('splitReplyBubbles parses delimiter and blank lines', () => {

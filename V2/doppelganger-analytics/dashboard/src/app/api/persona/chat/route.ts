@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    const result = await callAnthropicMessages({ system, messages, maxTokens: 500 });
+    const result = await callAnthropicMessages({ system, messages, maxTokens: 700 });
     const bubbles = splitReplyBubbles(result.text);
 
     return NextResponse.json({

@@ -5,6 +5,7 @@
  */
 
 import type { Database as DatabaseType } from 'better-sqlite3';
+import { extractReplyPairs } from './replyTurns.js';
 
 const PLACE_HINTS = new Set([
   'melbourne', 'sydney', 'brisbane', 'perth', 'adelaide', 'canberra', 'hobart',
@@ -283,19 +284,19 @@ function buildRegisterSummary(
   const bits: string[] = [];
   bits.push(`How ${persona} texts ${card.withPerson} specifically (use this register):`);
   bits.push(
-    `With ${card.withPerson} they average ~${card.avgWordsWithYou} words/message` +
+    `With ${card.withPerson} they average ~${card.avgWordsWithYou} words per bubble` +
       (card.avgWordsGlobal > 0
-        ? ` (vs ~${card.avgWordsGlobal} across all chats).`
-        : '.')
+        ? ` (vs ~${card.avgWordsGlobal} overall) — but a full turn is often several bubbles, not one clipped line.`
+        : ' — a full turn is often several bubbles, not one clipped line.')
   );
   if (card.openers.length) {
     bits.push(`Common openers with them: ${card.openers.map((o) => `"${o}"`).join(', ')}.`);
   }
   if (card.closers.length) {
-    bits.push(`Common wind-downs: ${card.closers.map((c) => `"${c}"`).join(', ')}.`);
+    bits.push(`Wind-downs (only when ending a chat): ${card.closers.map((c) => `"${c}"`).join(', ')}.`);
   }
   bits.push(
-    `They ask a question back in ~${Math.round(card.questionBackRate * 100)}% of messages to ${card.withPerson}.`
+    `When actively chatting with ${card.withPerson}, match their real pace with this person — react and continue when they would, without inventing questions or extra bubbles they would not send.`
   );
   if (card.addressForms.length) {
     bits.push(`Address them the way they do: ${card.addressForms.map((a) => `"${a}"`).join(', ')}.`);
@@ -510,6 +511,7 @@ export function buildRelationshipCard(
 
 /**
  * Few-shot pairs where the persona is replying to `selfSender` (their register with you).
+ * Full reply turns are joined with <<<BUBBLE>>> when they actually double-texted.
  */
 export function extractWithYouFewShot(
   db: DatabaseType,
@@ -548,46 +550,21 @@ export function extractWithYouFewShot(
     is_system: number;
   }>;
 
-  const pairs: Array<{
-    context: string;
-    reply: string;
-    conversationId: string;
-    source: string;
-    withYou: true;
-  }> = [];
-  let prev: (typeof rows)[number] | null = null;
+  const pairs = extractReplyPairs(rows, personaSender, {
+    limit: limit * 2,
+    contextSender: selfSender,
+    maxReplyChars: 550,
+  });
 
-  for (const row of rows) {
-    if (row.is_system) {
-      prev = null;
-      continue;
-    }
-    if (
-      prev &&
-      prev.conversation_id === row.conversation_id &&
-      prev.sender === selfSender &&
-      row.sender === personaSender &&
-      row.content.length >= 2 &&
-      prev.content.length >= 2 &&
-      !/sent \d+ photo|sent a voice message|shared a link/i.test(row.content) &&
-      !/sent \d+ photo|sent a voice message|shared a link/i.test(prev.content)
-    ) {
-      pairs.push({
-        context: prev.content.slice(0, 400),
-        reply: row.content.slice(0, 500),
-        conversationId: row.conversation_id,
-        source: row.source,
-        withYou: true,
-      });
-      if (pairs.length >= limit * 2) break;
-    }
-    prev = row;
-  }
-
-  // Prefer longer / more engaged replies when diversifying
-  const ranked = [...pairs].sort(
-    (a, b) => wordCount(b.reply) - wordCount(a.reply) || a.conversationId.localeCompare(b.conversationId)
-  );
+  // Prefer a mix: keep engaged replies, but don't only pick long multi-bubbles
+  const ranked = [...pairs].sort((a, b) => {
+    const aMulti = a.bubbleCount >= 2 ? 1 : 0;
+    const bMulti = b.bubbleCount >= 2 ? 1 : 0;
+    // Light preference for some multi-bubble so the format appears, but not only those
+    const aScore = wordCount(a.reply.replace(/<<<BUBBLE>>>/g, ' ')) + aMulti * 2;
+    const bScore = wordCount(b.reply.replace(/<<<BUBBLE>>>/g, ' ')) + bMulti * 2;
+    return bScore - aScore || a.conversationId.localeCompare(b.conversationId);
+  });
 
   const byConv = new Map<string, typeof ranked>();
   for (const p of ranked) {
@@ -603,5 +580,12 @@ export function extractWithYouFewShot(
     if (q.length > 0) diversified.push(q.shift()!);
     i++;
   }
-  return diversified;
+
+  return diversified.map((p) => ({
+    context: p.context,
+    reply: p.reply,
+    conversationId: p.conversationId,
+    source: p.source,
+    withYou: true as const,
+  }));
 }

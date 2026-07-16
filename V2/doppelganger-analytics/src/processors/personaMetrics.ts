@@ -9,6 +9,7 @@ import { buildConversationVoices, type ConversationVoice } from './conversationV
 import { buildBubbleHabits, type BubbleHabits } from './bubbleHabits.js';
 import { buildTurnTakingHabits, type TurnTakingHabits } from './turnTakingHabits.js';
 import { buildSharedTimeline, type SharedTimeline } from './sharedTimeline.js';
+import { extractReplyPairs } from './replyTurns.js';
 
 const STOP_WORDS = new Set([
   'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with',
@@ -24,7 +25,7 @@ interface SenderRow {
   avg_emoji_count: number;
 }
 
-/** Extract cross-sender reply pairs for few-shot LLM prompting. */
+/** Extract cross-sender reply pairs for few-shot LLM prompting (full reply turns). */
 function extractFewShotForSender(
   db: import('better-sqlite3').Database,
   sender: string,
@@ -47,52 +48,12 @@ function extractFewShotForSender(
     is_system: number;
   }>;
 
-  const pairs: PersonaStyleProfile['fewShotExamples'] = [];
-  let prev: (typeof rows)[number] | null = null;
-
-  for (const row of rows) {
-    if (row.is_system) {
-      prev = null;
-      continue;
-    }
-    if (
-      prev &&
-      prev.conversation_id === row.conversation_id &&
-      prev.sender !== row.sender &&
-      row.sender === sender &&
-      row.content.length >= 2 &&
-      prev.content.length >= 2 &&
-      // Skip media/system synthetic lines
-      !/sent \d+ photo|sent a voice message|shared a link/i.test(row.content) &&
-      !/sent \d+ photo|sent a voice message|shared a link/i.test(prev.content)
-    ) {
-      pairs.push({
-        context: prev.content.slice(0, 400),
-        reply: row.content.slice(0, 500),
-        conversationId: row.conversation_id,
-        source: row.source
-      });
-      if (pairs.length >= limit * 3) break; // oversample then diversify
-    }
-    prev = row;
-  }
-
-  // Prefer diverse conversation sources: round-robin by conversation.
-  const byConv = new Map<string, typeof pairs>();
-  for (const p of pairs) {
-    const list = byConv.get(p.conversationId) ?? [];
-    list.push(p);
-    byConv.set(p.conversationId, list);
-  }
-  const diversified: typeof pairs = [];
-  const queues = [...byConv.values()];
-  let i = 0;
-  while (diversified.length < limit && queues.some(q => q.length > 0)) {
-    const q = queues[i % queues.length];
-    if (q.length > 0) diversified.push(q.shift()!);
-    i++;
-  }
-  return diversified;
+  return extractReplyPairs(rows, sender, { limit, maxReplyChars: 550 }).map((p) => ({
+    context: p.context,
+    reply: p.reply,
+    conversationId: p.conversationId,
+    source: p.source,
+  }));
 }
 
 export interface PersonaStyleProfile {
