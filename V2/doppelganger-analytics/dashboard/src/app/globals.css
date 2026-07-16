@@ -1,0 +1,120 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  
+  /* Modern Theme Colors */
+  --modern-primary: #3b82f6;
+  --modern-secondary: #10b981;
+  --modern-accent: #f59e0b;
+  --modern-background: #f8fafc;
+  --modern-surface: #ffffff;
+  --modern-text: #1f2937;
+  --modern-text-secondary: #6b7280;
+  --modern-border: #e5e7eb;
+  --modern-success: #10b981;
+  --modern-warning: #f59e0b;
+  --modern-error: #ef4444;
+  --modern-info: #3b82f6;
+  
+  /* Classic Theme Colors */
+  --classic-primary: #1f2937;
+  --classic-secondary: #374151;
+  --classic-accent: #6b7280;
+  --classic-background: #f9fafb;
+  --classic-surface: #ffffff;
+  --classic-text: #111827;
+  --classic-text-secondary: #4b5563;
+  --classic-border: #d1d5db;
+  --classic-success: #059669;
+  --classic-warning: #d97706;
+  --classic-error: #dc2626;
+  --classic-info: #1f2937;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+/* Theme Application Classes */
+.theme-modern {
+  --theme-primary: var(--modern-primary);
+  --theme-secondary: var(--modern-secondary);
+  --theme-accent: var(--modern-accent);
+  --theme-background: var(--modern-background);
+  --theme-surface: var(--modern-surface);
+  --theme-text: var(--modern-text);
+  --theme-text-secondary: var(--modern-text-secondary);
+  --theme-border: var(--modern-border);
+  --theme-success: var(--modern-success);
+  --theme-warning: var(--modern-warning);
+  --theme-error: var(--modern-error);
+  --theme-info: var(--modern-info);
+}
+
+.theme-classic {
+  --theme-primary: var(--classic-primary);
+  --theme-secondary: var(--classic-secondary);
+  --theme-accent: var(--classic-accent);
+  --theme-background: var(--classic-background);
+  --theme-surface: var(--classic-surface);
+  --theme-text: var(--classic-text);
+  --theme-text-secondary: var(--classic-text-secondary);
+  --theme-border: var(--classic-border);
+  --theme-success: var(--classic-success);
+  --theme-warning: var(--classic-warning);
+  --theme-error: var(--classic-error);
+  --theme-info: var(--classic-info);
+}
+
+/* Utility Classes for Theme-Aware Components */
+.theme-bg-primary { background-color: var(--theme-primary); }
+.theme-bg-secondary { background-color: var(--theme-secondary); }
+.theme-bg-accent { background-color: var(--theme-accent); }
+.theme-bg-background { background-color: var(--theme-background); }
+.theme-bg-surface { background-color: var(--theme-surface); }
+
+.theme-text-primary { color: var(--theme-text); }
+.theme-text-secondary { color: var(--theme-text-secondary); }
+.theme-text-accent { color: var(--theme-accent); }
+
+.theme-border { border-color: var(--theme-border); }
+.theme-border-primary { border-color: var(--theme-primary); }
+
+/* Component-specific theme styles */
+.theme-card {
+  background-color: var(--theme-surface);
+  border-color: var(--theme-border);
+  color: var(--theme-text);
+}
+
+.theme-card-hero {
+  background: linear-gradient(135deg, var(--theme-primary), var(--theme-secondary));
+  color: white;
+}
+
+.theme-button-primary {
+  background-color: var(--theme-primary);
+  color: white;
+}
+
+.theme-button-primary:hover {
+  opacity: 0.9;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}

@@ -1,0 +1,29 @@
+# One-click local analytics.
+#
+# 1. Put your Instagram export ZIP in ./data/
+# 2. docker compose up --build
+# 3. Open http://localhost:3000
+#
+# To re-import after replacing the ZIP:
+#   FORCE_REIMPORT=1 docker compose up
+
+services:
+  analytics:
+    build: .
+    ports:
+      # Override if 3000 is taken: HOST_PORT=3001 docker compose up
+      - "${HOST_PORT:-3000}:3000"
+    volumes:
+      # Drop Instagram ZIP(s) or an extracted export here
+      - ./data:/export:ro
+      # Persist SQLite + generated metrics across restarts
+      - doppel-db:/root/.doppelgaenger-analytics
+      - doppel-metrics:/app/dash-data
+    environment:
+      - FORCE_REIMPORT=${FORCE_REIMPORT:-0}
+      - SKIP_IMPORT=${SKIP_IMPORT:-0}
+      - PORT=3000
+
+volumes:
+  doppel-db:
+  doppel-metrics:

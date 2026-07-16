@@ -1,0 +1,138 @@
+{
+  "textMetrics": {
+    "message_1": {
+      "wordCount": 11,
+      "emojiCount": 0,
+      "urlCount": 0
+    },
+    "message_2": {
+      "wordCount": 3,
+      "emojiCount": 0,
+      "urlCount": 0
+    },
+    "message_9": {
+      "wordCount": 8,
+      "emojiCount": 1,
+      "urlCount": 0
+    },
+    "totalMessages": 15,
+    "averageWordCount": 8.2,
+    "averageEmojiCount": 0.4,
+    "averageUrlCount": 0.07
+  },
+  "sentimentResults": {
+    "exhausted_message": {
+      "compound": -0.6124,
+      "positive": 0.0,
+      "negative": 0.384,
+      "neutral": 0.616
+    },
+    "book_message": {
+      "compound": 0.6369,
+      "positive": 0.746,
+      "negative": 0.0,
+      "neutral": 0.254
+    },
+    "amazing_message": {
+      "compound": 0.6369,
+      "positive": 0.746,
+      "negative": 0.0,
+      "neutral": 0.254
+    }
+  },
+  "contentTypes": {
+    "test_conversation": {
+      "short_text": 8,
+      "medium_text": 3,
+      "long_text": 1,
+      "emoji_only": 0,
+      "link_share": 1,
+      "media_notification": 2
+    }
+  },
+  "timeMetrics": {
+    "hourly": {
+      "21": 15
+    },
+    "daily": {
+      "6": 15
+    }
+  },
+  "mediaMetrics": {
+    "test_conversation": {
+      "photo_count": 1,
+      "video_count": 1,
+      "media_ratio": 0.133
+    }
+  },
+  "reactionMetrics": {
+    "test_conversation": {
+      "total_reactions": 1,
+      "reaction_types": {
+        "😮": 1
+      },
+      "top_reactors": [
+        {
+          "sender": "Finn Morris",
+          "count": 1
+        }
+      ]
+    }
+  },
+  "unicodeDecoding": {
+    "before_decoding": {
+      "apostrophe": "don\\u00e2\\u0080\\u0099t",
+      "emoji": "\\u00f0\\u009f\\u0098\\u00ae"
+    },
+    "after_decoding": {
+      "apostrophe": "don't",
+      "emoji": "😮"
+    }
+  },
+  "messageStructure": {
+    "instagram_format": {
+      "has_sender_name": true,
+      "has_timestamp_ms": true,
+      "has_content": true,
+      "has_photos_array": true,
+      "has_videos_array": true,
+      "has_reactions_array": true,
+      "has_instagram_flags": true
+    },
+    "processed_format": {
+      "creates_descriptive_content_for_media": true,
+      "preserves_unicode_properly": true,
+      "stores_reactions_separately": true,
+      "stores_media_separately": true
+    }
+  },
+  "engagementScores": {
+    "Tia Shannon": {
+      "overall_score": 75,
+      "message_frequency": 80,
+      "response_speed": 85,
+      "total_messages": 8
+    },
+    "Finn Morris": {
+      "overall_score": 70,
+      "message_frequency": 75,
+      "response_speed": 80,
+      "total_messages": 6
+    },
+    "Charlie Wilson": {
+      "overall_score": 40,
+      "message_frequency": 30,
+      "response_speed": 50,
+      "total_messages": 2
+    }
+  },
+  "responseLatency": {
+    "0-10s": 5,
+    "10-30s": 3,
+    "30-60s": 2,
+    "1-5m": 1,
+    "5-15m": 0,
+    "15-60m": 0,
+    ">1h": 0
+  }
+} 

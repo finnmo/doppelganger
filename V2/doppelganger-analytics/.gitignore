@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Test output
+coverage/
+tests/temp/
+test-dash-data/
+
+# Generated analytics data (produced by `generate`; not source)
+dash-data/*.json
+dashboard/public/data/*.json
+
+# Docker export drop folder (user data, never committed)
+data/*
+!data/.gitkeep
+
+# Local databases
+*.db
+*.db-wal
+*.db-shm
+
+# API keys / secrets (never commit — live keys live in ~/.doppelgaenger-analytics/)
+secrets.enc.json
+.master-key
+**/.env.local
+**/credentials.json
+
+# Secrets / credentials (never commit — keys live under ~/.doppelgaenger-analytics/)
+**/secrets.enc.json
+**/.master-key
+.env
+.env.*
+!.env.example
+
+# OS files
+.DS_Store
