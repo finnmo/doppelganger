@@ -2,8 +2,8 @@
 /**
  * One-click Docker entrypoint.
  *
- * 1. Looks for an Instagram export under /export (ZIP or extracted folder)
- * 2. Imports + generates metrics if the DB is empty or EXPORT_PATH is set
+ * 1. Looks for messaging export(s) under /export (ZIP(s) or extracted folder)
+ * 2. Imports + generates metrics if the DB is empty or FORCE_REIMPORT is set
  * 3. Syncs dash-data → dashboard/public/data
  * 4. Starts the Next.js production server on :3000
  */
@@ -27,8 +27,9 @@ function log(msg) {
   console.log(`[doppel] ${msg}`);
 }
 
-function findExport(dir) {
-  if (!fs.existsSync(dir)) return null;
+/** All ZIPs under dir, or the dir itself if it looks like an extracted export. */
+function findExports(dir) {
+  if (!fs.existsSync(dir)) return [];
 
   const entries = fs.readdirSync(dir, { withFileTypes: true });
   const zips = entries
@@ -36,23 +37,24 @@ function findExport(dir) {
     .map((e) => path.join(dir, e.name))
     .sort();
 
-  if (zips.length > 0) {
-    if (zips.length > 1) {
-      log(`Multiple ZIPs found; using ${path.basename(zips[0])}`);
-    }
-    return zips[0];
-  }
+  if (zips.length > 0) return zips;
 
-  // Already-extracted Instagram tree (messages/inbox/… or message_*.json)
   const hasMessages = entries.some(
     (e) =>
-      (e.isDirectory() && (e.name === 'messages' || e.name === 'inbox')) ||
-      (e.isFile() && e.name.startsWith('message_') && e.name.endsWith('.json'))
+      (e.isDirectory() &&
+        (e.name === 'messages' || e.name === 'inbox' || e.name === 'your_instagram_activity')) ||
+      (e.isFile() && e.name.startsWith('message_') && e.name.endsWith('.json')) ||
+      (e.isFile() && (e.name === '_chat.txt' || e.name === 'chat.db'))
   );
-  if (hasMessages || entries.length > 0) {
-    return dir;
+  if (hasMessages) return [dir];
+
+  // Nested single folder (common after unzip)
+  const dirs = entries.filter((e) => e.isDirectory() && !e.name.startsWith('.'));
+  if (dirs.length === 1) {
+    return findExports(path.join(dir, dirs[0].name));
   }
-  return null;
+
+  return [];
 }
 
 function dbHasMessages() {
@@ -101,32 +103,42 @@ function syncDashData() {
   log(`Synced ${files.length} metric files to the dashboard.`);
 }
 
+async function importAndGenerate(exportPaths) {
+  for (const exportPath of exportPaths) {
+    log(`Importing from ${exportPath}…`);
+    // Skip auto-generate per ZIP — one generate after all platforms land.
+    await run('node', ['dist/src/cli/index.js', 'import', '--no-generate', exportPath]);
+  }
+  log('Generating analytics…');
+  await run('node', ['dist/src/cli/index.js', 'generate']);
+}
+
 async function main() {
   fs.mkdirSync(DB_DIR, { recursive: true });
 
   const hasData = dbHasMessages();
-  const exportPath = findExport(EXPORT_DIR);
+  const exportPaths = findExports(EXPORT_DIR);
 
   if (!SKIP_IMPORT && (FORCE_REIMPORT || !hasData)) {
-    if (!exportPath) {
+    if (exportPaths.length === 0) {
       log('');
-      log('No Instagram export found.');
-      log(`Put your ZIP (or extracted folder) in the host folder mounted at ${EXPORT_DIR}`);
+      log('No messaging export found.');
+      log(`Put ZIP(s) or an extracted folder in the host folder mounted at ${EXPORT_DIR}`);
+      log('(Instagram / Messenger JSON, WhatsApp chat export, or iMessage chat.db)');
       log('Then restart: docker compose up');
       log('');
       if (!hasData) {
         log('Starting empty dashboard so you can confirm the UI works.');
       }
     } else {
-      log(`Importing from ${exportPath}…`);
-      await run('node', ['dist/src/cli/index.js', 'import', exportPath]);
-      log('Generating analytics…');
-      await run('node', ['dist/src/cli/index.js', 'generate']);
+      if (exportPaths.length > 1) {
+        log(`Found ${exportPaths.length} exports — importing all (platforms merge).`);
+      }
+      await importAndGenerate(exportPaths);
     }
   } else if (hasData) {
     log('Database already has messages — skipping import.');
     log('Set FORCE_REIMPORT=1 to re-import from /export.');
-    // Refresh metrics if dash-data is empty
     const dashData = path.resolve('dash-data');
     const hasMetrics =
       fs.existsSync(dashData) &&

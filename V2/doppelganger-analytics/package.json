@@ -26,6 +26,8 @@
     "persona-eval": "npm run build && node dist/src/cli/index.js persona-eval",
     "persona-finetune-export": "npm run build && node dist/src/cli/index.js persona-finetune-export",
     "dashboard": "npm run build && node dist/src/cli/index.js dashboard",
+    "test:e2e": "node scripts/e2e.mjs",
+    "test:e2e:docker": "node scripts/e2e.mjs --docker",
     "analyze": "npm run build && node dist/src/cli/index.js",
     "dev": "npm run dev:full",
     "dev:full": "npm run build && echo '🔧 Running fast development workflow...' && echo 'Please run: npm run dev:import <path-to-zip> && npm run dev:generate'",

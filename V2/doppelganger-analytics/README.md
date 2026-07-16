@@ -84,6 +84,7 @@ FORCE_REIMPORT=1 docker compose up
 | Old chats after replacing the ZIP | Run the `FORCE_REIMPORT=1` command above so it re-imports. |
 | Port 3000 already in use | Quit the other app, or run `HOST_PORT=3001 docker compose up` and open http://localhost:3001. |
 | Import treated Messenger as Instagram | Prefer a ZIP/folder name containing `facebook`, or re-import after renaming. |
+| `ENOSPC: no space left on device` during `docker compose build` | Docker Desktop’s VM disk is full (not your Mac). Free space: `docker builder prune -af && docker image prune -af`, then in Docker Desktop → Settings → Resources raise Disk image size. Retry `docker compose up --build`. |
 
 ### Alternative — without Docker (needs Node.js)
 

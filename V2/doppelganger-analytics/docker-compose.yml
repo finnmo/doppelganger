@@ -1,11 +1,14 @@
 # One-click local analytics.
 #
-# 1. Put your Instagram export ZIP in ./data/
+# 1. Put your messaging export ZIP(s) in ./data/
 # 2. docker compose up --build
 # 3. Open http://localhost:3000
 #
 # To re-import after replacing the ZIP:
 #   FORCE_REIMPORT=1 docker compose up
+#
+# If build fails with ENOSPC: prune Docker disk
+#   docker builder prune -af && docker image prune -af
 
 services:
   analytics:

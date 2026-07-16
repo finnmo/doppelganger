@@ -1,5 +1,5 @@
 # Doppelgänger Analytics — self-contained image.
-# Drop your Instagram export ZIP into ./data and run `docker compose up`.
+# Drop your messaging export ZIP(s) into ./data and run `docker compose up`.
 FROM node:22-slim AS build
 
 WORKDIR /app
@@ -13,8 +13,11 @@ RUN apt-get update \
 # Install dependencies first for layer caching. --ignore-scripts skips the
 # postinstall hook (which needs the source tree, copied below) — so the
 # better-sqlite3 binary must be built explicitly afterwards.
+# BuildKit cache mount keeps npm's cache off the tiny overlay filesystem
+# (avoids ENOSPC on Docker Desktop VMs with a full disk).
 COPY package.json package-lock.json ./
-RUN npm ci --ignore-scripts && npm rebuild better-sqlite3
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --ignore-scripts && npm rebuild better-sqlite3
 
 # Run in the dashboard directory itself: `npm ci --prefix` can wrongly
 # resolve the parent package-lock.json and fail with bogus sync errors.
@@ -22,7 +25,8 @@ COPY dashboard/package.json dashboard/package-lock.json ./dashboard/
 WORKDIR /app/dashboard
 # Do not use --ignore-scripts: optional native deps (e.g. lightningcss) need
 # their platform packages linked for Next/Tailwind builds.
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci
 WORKDIR /app
 
 # Build the backend CLI/processors.
@@ -45,7 +49,7 @@ COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/dashboard ./dashboard
 COPY docker/entrypoint.mjs ./docker/entrypoint.mjs
 
-# /export  — mount your Instagram export folder (read-only)
+# /export  — mount your messaging export folder (read-only)
 # DB + generated metrics persist in volumes (see docker-compose.yml)
 VOLUME ["/root/.doppelgaenger-analytics", "/app/dash-data"]
 
