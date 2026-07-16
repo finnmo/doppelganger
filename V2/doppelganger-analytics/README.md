@@ -1,30 +1,58 @@
 # Doppelgänger Analytics
 
-Turn your Instagram message export into an interactive analytics dashboard on your own computer. Your messages stay on your machine — nothing is uploaded.
+Turn your messaging exports (Instagram, Messenger, WhatsApp, iMessage) into an interactive analytics dashboard on your own computer. Your messages stay on your machine — nothing is uploaded.
 
 ## Just want to see your chats?
 
-**Recommended path: Docker.** You do not need to install Node.js or know how to code. You only need Docker Desktop and your Instagram export ZIP.
+**Recommended path: Docker.** You do not need to install Node.js or know how to code. You only need Docker Desktop and at least one export ZIP (or folder).
 
-### Step A — Get your Instagram messages (ZIP)
+### Step A — Download your messages
 
-Instagram does not email the ZIP instantly. Request it, then wait (often a few hours, sometimes a day or two).
+Meta does **not** email the ZIP instantly. Request it, then wait (often a few hours, sometimes a day or two). **Always choose JSON, never HTML** — HTML will not import.
 
-1. Open Instagram on your phone or [instagram.com](https://www.instagram.com) → your profile → **Settings and activity** (or Meta Accounts Center).
-2. Go to **Your information and permissions** → **Download your information**.
-3. Choose **Download or transfer information** → select your Instagram account.
-4. Choose **Some of your information** → turn on **Messages** (DMs). You can leave other categories off.
-5. Set **Format** to **JSON** (not HTML). Date range: **All time** is fine. Media quality: **Low** is enough.
-6. Submit the request. When Meta emails you a download link, download the ZIP to your computer (e.g. Downloads).
+#### Instagram DMs
 
-Keep that ZIP file handy for the next step.
+1. Open Instagram → your profile → **Settings and activity**, or go to [Accounts Center](https://accountscenter.facebook.com/).
+2. **Your information and permissions** → **Download your information** / **Export your information**.
+3. Create an export → select your **Instagram** profile → **Export to device**.
+4. Choose **Some of your information** (or the equivalent) → turn on **Messages** only if you want a smaller download.
+5. **Format: JSON**. Date range: **All time**. Media quality: **Low** is enough.
+6. Start the export. When Meta emails a link, download the ZIP.
+
+#### Facebook Messenger
+
+1. Open [Accounts Center](https://accountscenter.facebook.com/) (from Facebook or Messenger settings → Accounts Center).
+2. **Your information and permissions** → **Export your information** (UI may still say “Download your information”).
+3. **Create export** → select your **Facebook** profile (not Instagram) → **Export to device**.
+4. Include **Messages**. You can leave other categories off for a faster, smaller download.
+5. **Format: JSON** (not HTML). Date range: **All time**. Media quality: **Low** is fine.
+6. Start the export. When Meta emails a link, download the ZIP.
+
+Messenger and Instagram share the same Meta JSON shape. Imports are tagged separately (`messenger` vs `instagram`) so both can live in one database. Keep filenames/folders that mention `facebook` or `instagram` when possible — that helps source detection.
+
+#### WhatsApp (optional)
+
+1. In a chat or from WhatsApp settings, use **Export chat** (with or without media).
+2. You need a ZIP or folder that contains `_chat.txt` (WhatsApp’s export format).
+
+#### iMessage (optional, Mac only)
+
+Copy your Messages database (read-only is fine), typically:
+
+```bash
+cp ~/Library/Messages/chat.db ./chat.db
+```
+
+Full-disk / Messages access may be required on macOS. Import that `chat.db` path.
+
+Keep each export handy for the next step. You can import several platforms over time — each import **replaces only that platform’s rows** and keeps the others.
 
 ### Step B — Run with Docker (easiest)
 
 1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) and open it. Wait until it says Docker is running (the whale icon is idle, not “starting”).
 2. Get this project onto your computer (clone or download the folder). You should see a file named `docker-compose.yml` inside it.
 3. In that same project folder, create a folder named `data` (if it is not already there).
-4. Put your Instagram ZIP **inside** the `data` folder. One ZIP is enough.
+4. Put your export ZIP(s) **inside** the `data` folder (Instagram, Messenger, WhatsApp — any mix).
 5. Open Terminal (Mac) or PowerShell (Windows), go into the project folder, then run:
 
 ```bash
@@ -36,9 +64,9 @@ The first run can take several minutes while Docker downloads and builds. Leave 
 
 To stop: press `Ctrl+C` in that terminal window, or quit Docker Desktop.
 
-**Privacy:** Import, analysis, and the dashboard all run locally in Docker on your computer.
+**Privacy:** Import, analysis, and the dashboard all run locally in Docker on your computer. Use the dashboard **Privacy** button to export analytics or wipe local data.
 
-**Updating with a new export:** Replace the ZIP in `data`, then run:
+**Updating with a new export:** Replace or add ZIPs in `data`, then run:
 
 ```bash
 FORCE_REIMPORT=1 docker compose up
@@ -51,17 +79,18 @@ FORCE_REIMPORT=1 docker compose up
 | What you see | What to try |
 |---|---|
 | “Cannot connect to the Docker daemon” | Open Docker Desktop and wait until it is fully started, then run the command again. |
-| “No Instagram export found” | Confirm the ZIP is inside the project’s `data` folder (not next to it), then restart with `docker compose up`. |
+| “No … export found” | Confirm the ZIP is inside the project’s `data` folder (not next to it), then restart with `docker compose up`. |
 | Browser can’t open localhost:3000 | Wait until the build finishes; the first run is slow. Check the terminal for error messages. |
 | Old chats after replacing the ZIP | Run the `FORCE_REIMPORT=1` command above so it re-imports. |
 | Port 3000 already in use | Quit the other app, or run `HOST_PORT=3001 docker compose up` and open http://localhost:3001. |
+| Import treated Messenger as Instagram | Prefer a ZIP/folder name containing `facebook`, or re-import after renaming. |
 
 ### Alternative — without Docker (needs Node.js)
 
 Use this only if you already have Node.js, or prefer not to use Docker.
 
 1. Install **Node.js 20 or newer** from [nodejs.org](https://nodejs.org/) (LTS is fine).
-2. Get the Instagram ZIP (Step A above).
+2. Get your export ZIP(s) (Step A above).
 3. In Terminal / PowerShell, go into the project folder and run:
 
 ```bash
@@ -69,7 +98,15 @@ npm install
 npm run analyze
 ```
 
-4. In the menu: **Import** (paste the path to your ZIP) → **Generate** → **Dashboard**. Open the URL it prints (often http://localhost:3000 or 3001).
+4. In the menu: **Import** (paste the path to your ZIP) → analytics regenerate automatically → **Dashboard**. Open the URL it prints (often http://localhost:3000 or 3001).
+
+Or as separate commands (import regenerates metrics by default; use `--no-generate` to skip):
+
+```bash
+npm run import -- /path/to/instagram-export.zip
+npm run import -- /path/to/facebook-messenger-export.zip
+npm run dashboard
+```
 
 ### Claude API key (for persona chat)
 
@@ -84,15 +121,7 @@ In the dashboard header, click **API key**. Paste a key from [console.anthropic.
 
 1. Import + generate metrics (creates `personaProfiles.json`).
 2. Open the dashboard → open a conversation → **Persona Chat** tab.
-3. Pick someone from the list and message them. Replies use Claude with their style profile and real few-shot examples.
-
-Same steps as separate commands:
-
-```bash
-npm run import -- /path/to/instagram-export.zip
-npm run generate-metrics
-npm run dashboard
-```
+3. Pick someone from the list and message them. Replies use Claude with their style profile, with-you register, and platform/conversation voice when scoped.
 
 ---
 
@@ -121,20 +150,25 @@ npm run dashboard
 
 ## 📋 Prerequisites
 
-**Non-technical / recommended:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) + Instagram messages ZIP (Step A above).
+**Non-technical / recommended:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) + at least one messaging export ZIP (Step A above).
 
-**Developers / without Docker:** Node.js 20 or newer (`.nvmrc` pins 23 for contributors; any Node ≥20 works) + the same Instagram ZIP.
+**Developers / without Docker:** Node.js 20 or newer (`.nvmrc` pins 23 for contributors; any Node ≥20 works) + the same export(s).
 
 ## 🚀 Quick Start (developers)
 
 ```bash
 npm install
-npm run import -- <path-to-instagram-export.zip>
-npm run generate-metrics
+npm run import -- <path-to-export.zip>   # regenerates metrics by default
 npm run dashboard
 ```
 
-You can also run `npm run analyze` for the interactive menu.
+You can also run `npm run analyze` for the interactive menu. Multiple platforms:
+
+```bash
+npm run import -- ./instagram-export.zip
+npm run import -- ./facebook-messenger-export.zip
+npm run import -- ./WhatsApp\ Chat.zip
+```
 
 ### Troubleshooting a fresh setup
 
@@ -190,7 +224,7 @@ message_reactions (message_id, reaction, actor, timestamp)
 ```
 
 ### **Data Processing Pipeline**
-1. **Import**: Parse Instagram JSON → SQLite database (messages, photos, videos, reactions)
+1. **Import**: Parse platform export → SQLite (messages tagged by source: instagram, messenger, whatsapp, imessage)
 2. **Process**: Run the specialized processors in `src/processors/` for metrics computation
 3. **Export**: Generate JSON files into `dash-data/` for dashboard consumption
 4. **Visualize**: Interactive dashboard with client-side filtering (the CLI `dashboard` command syncs `dash-data/` → `dashboard/public/data/`)
@@ -241,12 +275,12 @@ doppelganger-analytics/
 npm run analyze              # Interactive menu (import / generate / dashboard)
 
 # Data processing
-npm run import -- <zip-file>  # Import Instagram data
-npm run generate-metrics      # Generate all analytics
-npm run dashboard             # Sync data + start the dashboard
-npm test                      # Run test suite
-npm run lint                  # Lint backend + tests
-npm run rebuild:native        # Rebuild better-sqlite3 after a Node change
+npm run import -- <zip-or-folder>  # Import (Instagram / Messenger / WhatsApp / iMessage); regenerates metrics
+npm run generate-metrics           # Generate all analytics (also runs after import by default)
+npm run dashboard                  # Sync data + start the dashboard
+npm test                           # Run test suite
+npm run lint                       # Lint backend + tests
+npm run rebuild:native             # Rebuild better-sqlite3 after a Node change
 
 # Development (caps imports at 2,000 messages)
 npm run dev:import -- <zip-file>
@@ -325,7 +359,7 @@ npm run lint                  # Lint dashboard
 
 ## 📝 License
 
-Part of the Doppelgänger project for Instagram message analytics.
+Part of the Doppelgänger project for multi-platform messaging analytics.
 
 ---
 
