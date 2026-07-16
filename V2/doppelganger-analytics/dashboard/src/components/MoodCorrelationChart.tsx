@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
-import { Heart, BarChart3, Users } from 'lucide-react';
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, LineChart, Line } from 'recharts';
+import { Heart, BarChart3, Users, TrendingUp } from 'lucide-react';
 import { useConversationFilter } from '@/contexts/ConversationContext';
+import type { SentimentDailyBySenderRow } from '@/lib/sentimentTimeline';
 
 interface CorrelationPair {
   sender1: string;
@@ -68,108 +69,130 @@ const getCorrelationStrength = (correlation: number): 'strong' | 'moderate' | 'w
   return 'none';
 };
 
+function pearsonCorrelation(x: number[], y: number[]): number {
+  if (x.length !== y.length || x.length < 2) return 0;
+  const n = x.length;
+  const sumX = x.reduce((a, b) => a + b, 0);
+  const sumY = y.reduce((a, b) => a + b, 0);
+  const sumXY = x.reduce((sum, xi, i) => sum + xi * y[i], 0);
+  const sumX2 = x.reduce((sum, xi) => sum + xi * xi, 0);
+  const sumY2 = y.reduce((sum, yi) => sum + yi * yi, 0);
+  const num = n * sumXY - sumX * sumY;
+  const den = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+  return den === 0 ? 0 : num / den;
+}
+
+function buildFilteredMoodData(
+  sentimentData: RawSentimentData[],
+  dailySenderRows: SentimentDailyBySenderRow[],
+  selectedConversations: string[]
+): MoodCorrelationData {
+  const selected = new Set(selectedConversations);
+  const uniqueSenders = [...new Set(sentimentData.map(item => item.sender))];
+
+  const dateGroups = new Map<string, Map<string, { sum: number; count: number }>>();
+  for (const row of dailySenderRows) {
+    if (selected.size > 0 && !selected.has(row.conversation_id)) continue;
+    let day = dateGroups.get(row.date);
+    if (!day) {
+      day = new Map();
+      dateGroups.set(row.date, day);
+    }
+    const existing = day.get(row.sender) ?? { sum: 0, count: 0 };
+    existing.sum += row.compoundSum;
+    existing.count += row.messageCount;
+    day.set(row.sender, existing);
+  }
+
+  const senderDaily = new Map<string, Map<string, number>>();
+  for (const [date, senders] of dateGroups.entries()) {
+    for (const [sender, vals] of senders.entries()) {
+      if (!senderDaily.has(sender)) senderDaily.set(sender, new Map());
+      senderDaily.get(sender)!.set(date, vals.sum / vals.count);
+    }
+  }
+
+  const correlationMatrix: CorrelationPair[] = [];
+  for (let i = 0; i < uniqueSenders.length; i++) {
+    for (let j = i + 1; j < uniqueSenders.length; j++) {
+      const s1 = uniqueSenders[i];
+      const s2 = uniqueSenders[j];
+      const dates1 = senderDaily.get(s1);
+      const dates2 = senderDaily.get(s2);
+      if (!dates1 || !dates2) continue;
+      const sharedDates = [...dates1.keys()].filter(d => dates2.has(d)).sort();
+      if (sharedDates.length < 3) continue;
+      const x = sharedDates.map(d => dates1.get(d)!);
+      const y = sharedDates.map(d => dates2.get(d)!);
+      const correlation = pearsonCorrelation(x, y);
+      correlationMatrix.push({
+        sender1: s1,
+        sender2: s2,
+        correlation: Math.round(correlation * 1000) / 1000,
+        sharedDays: sharedDates.length,
+        totalDays: Math.max(dates1.size, dates2.size),
+        strength: getCorrelationStrength(correlation)
+      });
+    }
+  }
+
+  const moodPatterns: MoodPattern[] = uniqueSenders.map(sender => {
+    const senderData = sentimentData.filter(item => item.sender === sender);
+    const totalMessages = senderData.reduce((sum, item) => sum + item.message_count, 0) || 1;
+    const avgMood = senderData.reduce((sum, item) => sum + (item.avg_sentiment * item.message_count), 0) / totalMessages;
+    const dailyVals = [...(senderDaily.get(sender)?.values() ?? [])];
+    const moodVariability = calculateVariability(dailyVals.length > 1 ? dailyVals : [avgMood]);
+    return {
+      sender,
+      averageMood: Math.round(avgMood * 1000) / 1000,
+      moodVariability: Math.round(moodVariability * 1000) / 1000,
+      positiveStreak: 0,
+      negativeStreak: 0,
+      moodTrend: avgMood > 0.05 ? 'improving' : avgMood < -0.05 ? 'declining' : 'stable',
+      dominantEmotion: avgMood > 0.1 ? 'positive' : avgMood < -0.1 ? 'negative' : 'neutral'
+    };
+  });
+
+  const timeSeriesData = [...dateGroups.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, senders]) => ({
+      date,
+      participants: Object.fromEntries(
+        [...senders.entries()].map(([s, v]) => [s, Math.round((v.sum / v.count) * 1000) / 1000])
+      )
+    }));
+
+  const dates = timeSeriesData.map(d => d.date);
+  const strongCorrelations = correlationMatrix.filter(c => c.strength === 'strong').length;
+  const averageCorrelation = correlationMatrix.length > 0
+    ? correlationMatrix.reduce((sum, c) => sum + Math.abs(c.correlation), 0) / correlationMatrix.length
+    : 0;
+
+  return {
+    summary: {
+      totalParticipants: uniqueSenders.length,
+      totalCorrelations: correlationMatrix.length,
+      strongCorrelations,
+      averageCorrelation: Math.round(averageCorrelation * 1000) / 1000,
+      dateRange: { start: dates[0] || 'N/A', end: dates[dates.length - 1] || 'N/A' }
+    },
+    correlationMatrix,
+    moodPatterns,
+    timeSeriesData
+  };
+}
+
 export default function MoodCorrelationChart() {
   const [data, setData] = useState<MoodCorrelationData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'correlations' | 'patterns'>('correlations');
+  const [viewMode, setViewMode] = useState<'correlations' | 'patterns' | 'timeline'>('timeline');
   const { selectedConversations, isFiltered } = useConversationFilter();
 
-  const processFilteredMoodData = useCallback((sentimentData: RawSentimentData[]): MoodCorrelationData => {
-    // Get unique senders from filtered data
-    const uniqueSenders = [...new Set(sentimentData.map(item => item.sender))];
-    
-    // Create mood patterns for filtered participants
-    const moodPatterns: MoodPattern[] = uniqueSenders.map(sender => {
-      const senderData = sentimentData.filter(item => item.sender === sender);
-      const totalMessages = senderData.reduce((sum, item) => sum + item.message_count, 0);
-      const avgMood = senderData.reduce((sum, item) => sum + (item.avg_sentiment * item.message_count), 0) / totalMessages;
-      
-      // Calculate mood variability from sentiment scores
-      const sentimentScores = senderData.flatMap(item => 
-        Array(item.message_count).fill(item.avg_sentiment)
-      );
-      const moodVariability = calculateVariability(sentimentScores);
-      
-      // Determine mood trend based on average sentiment
-      let moodTrend: 'improving' | 'declining' | 'stable' = 'stable';
-      if (avgMood > 0.1) moodTrend = 'improving';
-      else if (avgMood < -0.1) moodTrend = 'declining';
-      
-      // Determine dominant emotion
-      let dominantEmotion: 'positive' | 'negative' | 'neutral' = 'neutral';
-      if (avgMood > 0.1) dominantEmotion = 'positive';
-      else if (avgMood < -0.1) dominantEmotion = 'negative';
-      
-      return {
-        sender,
-        averageMood: Math.round(avgMood * 1000) / 1000,
-        moodVariability: Math.round(moodVariability * 1000) / 1000,
-        positiveStreak: avgMood > 0 ? Math.round(avgMood * 10) : 0,
-        negativeStreak: avgMood < 0 ? Math.round(Math.abs(avgMood) * 10) : 0,
-        moodTrend,
-        dominantEmotion
-      };
-    });
-
-    // Create correlation matrix for filtered participants
-    const correlationMatrix: CorrelationPair[] = [];
-    for (let i = 0; i < uniqueSenders.length; i++) {
-      for (let j = i + 1; j < uniqueSenders.length; j++) {
-        const sender1 = uniqueSenders[i];
-        const sender2 = uniqueSenders[j];
-        
-        // Find shared conversations between these two senders
-        const sender1Conversations = new Set(sentimentData.filter(item => item.sender === sender1).map(item => item.conversation_id));
-        const sender2Conversations = new Set(sentimentData.filter(item => item.sender === sender2).map(item => item.conversation_id));
-        const sharedConversations = [...sender1Conversations].filter(conv => sender2Conversations.has(conv));
-        
-        if (sharedConversations.length > 0) {
-          // Calculate correlation based on shared conversations
-          const sender1Data = sentimentData.filter(item => item.sender === sender1 && sharedConversations.includes(item.conversation_id));
-          const sender2Data = sentimentData.filter(item => item.sender === sender2 && sharedConversations.includes(item.conversation_id));
-          
-          const sender1Avg = sender1Data.reduce((sum, item) => sum + (item.avg_sentiment * item.message_count), 0) / 
-                            sender1Data.reduce((sum, item) => sum + item.message_count, 0);
-          const sender2Avg = sender2Data.reduce((sum, item) => sum + (item.avg_sentiment * item.message_count), 0) / 
-                            sender2Data.reduce((sum, item) => sum + item.message_count, 0);
-          
-          // Simple correlation calculation
-          const correlation = Math.round((sender1Avg + sender2Avg) / 2 * 1000) / 1000;
-          
-          correlationMatrix.push({
-            sender1,
-            sender2,
-            correlation,
-            sharedDays: sharedConversations.length,
-            totalDays: Math.max(sender1Data.length, sender2Data.length),
-            strength: getCorrelationStrength(correlation)
-          });
-        }
-      }
-    }
-
-    // Calculate summary statistics
-    const totalCorrelations = correlationMatrix.length;
-    const strongCorrelations = correlationMatrix.filter(corr => corr.strength === 'strong').length;
-    const averageCorrelation = totalCorrelations > 0 ? 
-      correlationMatrix.reduce((sum, corr) => sum + corr.correlation, 0) / totalCorrelations : 0;
-
-    return {
-      summary: {
-        totalParticipants: uniqueSenders.length,
-        totalCorrelations,
-        strongCorrelations,
-        averageCorrelation: Math.round(averageCorrelation * 1000) / 1000,
-        dateRange: {
-          start: 'Filtered Data',
-          end: 'Filtered Data'
-        }
-      },
-      correlationMatrix,
-      moodPatterns,
-      timeSeriesData: [] // No time series data for filtered view
-    };
-  }, []);
+  const processFilteredMoodData = useCallback((
+    sentimentData: RawSentimentData[],
+    dailySenderRows: SentimentDailyBySenderRow[],
+    selectedConversations: string[]
+  ): MoodCorrelationData => buildFilteredMoodData(sentimentData, dailySenderRows, selectedConversations), []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -179,10 +202,16 @@ export default function MoodCorrelationChart() {
           const correlationData: MoodCorrelationData = await response.json();
           setData(correlationData);
         } else {
-          const sentimentResponse = await fetch('/data/sentimentBySender.json');
+          const [sentimentResponse, dailySenderResponse] = await Promise.all([
+            fetch('/data/sentimentBySender.json'),
+            fetch('/data/sentimentDailyBySender.json')
+          ]);
           let sentimentData: RawSentimentData[] = await sentimentResponse.json();
-          
-          sentimentData = sentimentData.filter(item => 
+          const dailySenderRows: SentimentDailyBySenderRow[] = dailySenderResponse.ok
+            ? await dailySenderResponse.json()
+            : [];
+
+          sentimentData = sentimentData.filter(item =>
             selectedConversations.includes(item.conversation_id)
           );
 
@@ -191,8 +220,7 @@ export default function MoodCorrelationChart() {
             return;
           }
 
-          const processedData = processFilteredMoodData(sentimentData);
-          setData(processedData);
+          setData(processFilteredMoodData(sentimentData, dailySenderRows, selectedConversations));
         }
       } catch (error) {
         console.error('Error loading mood correlation data:', error);
@@ -261,6 +289,21 @@ export default function MoodCorrelationChart() {
     );
   };
 
+  const timelineChartData = data.timeSeriesData.map(point => ({
+    date: point.date,
+    ...point.participants
+  }));
+  const timelineSenders = data.moodPatterns.map(p => p.sender).slice(0, 6);
+  const LINE_COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#6b7280'];
+  const correlationBarData = data.correlationMatrix.map(c => ({
+    label: `${c.sender1} ↔ ${c.sender2}`,
+    correlation: c.correlation,
+    strength: c.strength,
+    sender1: c.sender1,
+    sender2: c.sender2,
+    sharedDays: c.sharedDays
+  }));
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 text-sm">
@@ -283,6 +326,17 @@ export default function MoodCorrelationChart() {
       </div>
 
       <div className="flex bg-gray-100 rounded-lg p-1 w-fit">
+          <button
+          className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+              viewMode === 'timeline'
+              ? 'bg-white text-red-600 shadow-sm' 
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          onClick={() => setViewMode('timeline')}
+        >
+          <TrendingUp className="w-4 h-4 inline mr-1" />
+          Daily Moods
+          </button>
           <button
           className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
               viewMode === 'correlations'
@@ -309,30 +363,38 @@ export default function MoodCorrelationChart() {
 
       <div className="h-80">
         <ResponsiveContainer width="100%" height="100%">
-          {viewMode === 'correlations' ? (
-            <ScatterChart data={data.correlationMatrix} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis 
-                type="number"
-                dataKey="correlation"
-                domain={[-1, 1]}
-                stroke="#6b7280"
-                fontSize={12}
-                tickFormatter={(value) => value.toFixed(1)}
-              />
-              <YAxis 
-                type="number"
-                dataKey="sharedDays"
-                stroke="#6b7280"
-                fontSize={12}
-              />
-              <Tooltip content={<CustomTooltip />} />
-              <Scatter dataKey="correlation" fill="#8884d8">
-                {data.correlationMatrix.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={getCorrelationColor(entry.strength)} />
+          {viewMode === 'timeline' ? (
+            timelineChartData.length > 0 ? (
+              <LineChart data={timelineChartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="date" stroke="#6b7280" fontSize={10} tickFormatter={(v, i) => i % Math.ceil(timelineChartData.length / 8) === 0 ? v : ''} />
+                <YAxis domain={[-1, 1]} stroke="#6b7280" fontSize={12} />
+                <Tooltip />
+                {timelineSenders.map((sender, i) => (
+                  <Line key={sender} type="monotone" dataKey={sender} stroke={LINE_COLORS[i % LINE_COLORS.length]} strokeWidth={2} dot={false} connectNulls />
                 ))}
-              </Scatter>
-            </ScatterChart>
+              </LineChart>
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-500">No daily mood data</div>
+            )
+          ) : viewMode === 'correlations' ? (
+            correlationBarData.length > 0 ? (
+              <BarChart data={correlationBarData} layout="vertical" margin={{ top: 20, right: 30, left: 80, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis type="number" domain={[-1, 1]} stroke="#6b7280" fontSize={12} />
+                <YAxis type="category" dataKey="label" stroke="#6b7280" fontSize={11} width={75} />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="correlation" radius={[0, 4, 4, 0]}>
+                  {correlationBarData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={getCorrelationColor(entry.strength)} />
+                  ))}
+                </Bar>
+              </BarChart>
+            ) : (
+              <div className="flex items-center justify-center h-full text-gray-500 text-center px-4">
+                Need at least 3 shared days between two participants for correlation
+              </div>
+            )
           ) : (
             <BarChart data={data.moodPatterns} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -367,21 +429,17 @@ export default function MoodCorrelationChart() {
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-red-500"></div>
               <span>Strong (≥0.7)</span>
-                </div>
+            </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
               <span>Moderate (≥0.4)</span>
-                  </div>
+            </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-gray-500"></div>
               <span>Weak (≥0.2)</span>
-                </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-gray-300"></div>
-              <span>None (&lt;0.2)</span>
             </div>
           </div>
-        ) : (
+        ) : viewMode === 'patterns' ? (
           <div className="flex flex-wrap gap-4">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-green-500"></div>
@@ -395,6 +453,15 @@ export default function MoodCorrelationChart() {
               <div className="w-3 h-3 rounded-full bg-gray-500"></div>
               <span>Neutral Mood</span>
             </div>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-4">
+            {timelineSenders.map((sender, i) => (
+              <div key={sender} className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: LINE_COLORS[i % LINE_COLORS.length] }} />
+                <span>{sender}</span>
+              </div>
+            ))}
           </div>
         )}
       </div>

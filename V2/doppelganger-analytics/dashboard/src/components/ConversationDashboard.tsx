@@ -122,7 +122,7 @@ export function ConversationDashboard({ conversationId, onBack }: ConversationDa
 
       <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
 
-      <div className={`${PAGE_SHELL} py-5 sm:py-8`}>
+      <div className={`${PAGE_SHELL} py-3 sm:py-4`}>
         {renderTabContent()}
       </div>
     </div>

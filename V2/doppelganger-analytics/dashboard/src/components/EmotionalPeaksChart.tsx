@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { useConversationFilter } from '@/contexts/ConversationContext';
-import { useTheme } from '@/contexts/ThemeContext';
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, LineChart, Line } from 'recharts';
 import { TrendingUp, TrendingDown, Target, Zap, Heart, AlertTriangle, Users, Calendar, Activity, Info } from 'lucide-react';
 
@@ -35,11 +34,59 @@ interface EmotionalPeak {
 }
 
 interface EmotionalPattern {
-  pattern_type: 'volatility' | 'stability' | 'gradual_increase' | 'gradual_decrease' | 'cyclical';
+  pattern_type: string;
   frequency: number;
   description: string;
-  time_periods: string[];
-  participants_involved: string[];
+  avg_intensity?: number;
+  time_periods?: string[];
+  participants_involved?: string[];
+}
+
+function computeFilteredPatterns(peaks: EmotionalPeak[]): EmotionalPattern[] {
+  if (peaks.length === 0) return [];
+  const peaksOnly = peaks.filter(p => p.type === 'peak');
+  const valleysOnly = peaks.filter(p => p.type === 'valley');
+  const avgIntensity = peaks.reduce((s, p) => s + Math.abs(p.sentiment_score), 0) / peaks.length;
+  const patterns: EmotionalPattern[] = [];
+
+  if (peaksOnly.length > valleysOnly.length) {
+    patterns.push({
+      pattern_type: 'volatility',
+      frequency: peaks.length,
+      avg_intensity: avgIntensity,
+      description: 'More emotional peaks than valleys in this period'
+    });
+  } else if (valleysOnly.length > peaksOnly.length) {
+    patterns.push({
+      pattern_type: 'gradual_decline',
+      frequency: valleysOnly.length,
+      avg_intensity: avgIntensity,
+      description: 'More emotional valleys than peaks in this period'
+    });
+  } else {
+    patterns.push({
+      pattern_type: 'stability',
+      frequency: peaks.length,
+      avg_intensity: avgIntensity,
+      description: 'Balanced peaks and valleys'
+    });
+  }
+
+  const triggers = new Map<string, number>();
+  peaks.forEach(p => {
+    const t = p.trigger_analysis?.primary_trigger || 'unknown';
+    triggers.set(t, (triggers.get(t) || 0) + 1);
+  });
+  const topTrigger = [...triggers.entries()].sort((a, b) => b[1] - a[1])[0];
+  if (topTrigger) {
+    patterns.push({
+      pattern_type: 'cyclical',
+      frequency: topTrigger[1],
+      avg_intensity: avgIntensity,
+      description: `Most common trigger: ${topTrigger[0].replace(/_/g, ' ')}`
+    });
+  }
+  return patterns;
 }
 
 interface TriggerAnalysis {
@@ -116,7 +163,7 @@ export function EmotionalPeaksChart() {
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'timeline' | 'triggers' | 'patterns' | 'recovery'>('timeline');
   const { selectedConversations, isFiltered } = useConversationFilter();
-  const { getThemeClasses } = useTheme();
+
 
   useEffect(() => {
     const loadData = async () => {
@@ -252,7 +299,7 @@ export function EmotionalPeaksChart() {
               dominant_pattern: filteredTriggerAnalysis[0]?.trigger || 'none'
             },
             peaks_and_valleys: filteredPeaksAndValleys,
-            emotional_patterns: [], // Would need full temporal analysis to recalculate properly
+              emotional_patterns: computeFilteredPatterns(filteredPeaksAndValleys),
             trigger_analysis: filteredTriggerAnalysis,
             temporal_analysis: {
               hourly_volatility: [],
@@ -290,16 +337,11 @@ export function EmotionalPeaksChart() {
     loadData();
   }, [selectedConversations, isFiltered]);
 
-  const themeClasses = getThemeClasses();
 
   // Loading state
   if (loading) {
     return (
-      <div className={themeClasses.sectionCardClass}>
-        <div className="flex items-center space-x-2 mb-4">
-          <Activity className="w-5 h-5 text-blue-600" />
-          <h3 className="text-lg font-semibold">Emotional Peaks & Valleys</h3>
-        </div>
+      <div>
         <div className="flex items-center justify-center h-64">
           <div className="text-gray-500">Loading emotional analysis...</div>
         </div>
@@ -310,11 +352,7 @@ export function EmotionalPeaksChart() {
   // Error state
   if (error || !data) {
     return (
-      <div className={themeClasses.sectionCardClass}>
-        <div className="flex items-center space-x-2 mb-4">
-          <AlertTriangle className="w-5 h-5 text-red-600" />
-          <h3 className="text-lg font-semibold">Emotional Peaks & Valleys</h3>
-        </div>
+      <div>
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <AlertTriangle className="w-12 h-12 text-gray-400 mx-auto mb-2" />
@@ -331,11 +369,7 @@ export function EmotionalPeaksChart() {
   // Empty state
   if (data.summary.total_peaks === 0 && data.summary.total_valleys === 0) {
     return (
-      <div className={themeClasses.sectionCardClass}>
-        <div className="flex items-center space-x-2 mb-4">
-          <Target className="w-5 h-5 text-blue-600" />
-          <h3 className="text-lg font-semibold">Emotional Peaks & Valleys</h3>
-        </div>
+      <div>
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <Target className="w-12 h-12 text-gray-400 mx-auto mb-2" />
@@ -545,20 +579,23 @@ export function EmotionalPeaksChart() {
       <div>
         <h4 className="text-sm font-semibold mb-3">Emotional Patterns Detected</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {data.emotional_patterns.map((pattern, index) => (
+          {data.emotional_patterns.length === 0 ? (
+            <p className="text-sm text-gray-500">No distinct patterns detected for this selection.</p>
+          ) : (
+          data.emotional_patterns.map((pattern, index) => (
             <div key={index} className="bg-blue-50 p-4 rounded-lg border border-blue-200">
               <div className="font-semibold text-blue-900 capitalize mb-2">
-                {pattern.pattern_type.replace('_', ' ')}
+                {pattern.pattern_type.replace(/_/g, ' ')}
               </div>
               <div className="text-sm text-blue-700 mb-2">
                 {pattern.description}
               </div>
               <div className="text-xs text-blue-600">
                 <div>Frequency: {pattern.frequency}</div>
-                <div>Avg Intensity: {'N/A'}</div>
+                <div>Avg Intensity: {pattern.avg_intensity != null ? pattern.avg_intensity.toFixed(2) : 'N/A'}</div>
               </div>
             </div>
-          ))}
+          )))}
         </div>
       </div>
 
@@ -663,16 +700,10 @@ export function EmotionalPeaksChart() {
   );
 
   return (
-    <div className={themeClasses.sectionCardClass}>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-2">
-          <Activity className="w-5 h-5 text-blue-600" />
-          <h3 className="text-lg font-semibold">Emotional Peaks & Valleys</h3>
-        </div>
-        
-        {/* View mode selector */}
-        <div className="flex space-x-2">
+    <div>
+      {/* View mode selector (card title/tooltip live in the parent ChartCard) */}
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex flex-wrap gap-1.5">
           {[
             { id: 'timeline', label: 'Timeline', icon: <Calendar className="w-4 h-4" /> },
             { id: 'triggers', label: 'Triggers', icon: <Zap className="w-4 h-4" /> },
@@ -696,7 +727,7 @@ export function EmotionalPeaksChart() {
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+      <div className="grid grid-cols-2 gap-2 mb-3">
         <div className="bg-green-50 p-3 rounded-lg">
           <div className="text-green-600 font-semibold text-sm">Emotional Peaks</div>
           <div className="text-xl font-bold text-green-900">{data.summary.total_peaks}</div>

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useConversationFilter } from '@/contexts/ConversationContext';
-import { Users, MessageCircle, Clock, ArrowRight } from 'lucide-react';
+import { Users, MessageCircle, Clock, ArrowRight, EyeOff, Eye } from 'lucide-react';
 import { ThemeSelector } from '@/components/ThemeSelector';
 import { ApiKeySettingsButton } from '@/components/ApiKeySettings';
 import { PrivacySettingsButton } from '@/components/PrivacySettings';
@@ -11,14 +11,35 @@ import { PlatformBadge } from '@/components/PlatformBadge';
 import { parseConversationId, platformStyles, sourceLabel } from '@/lib/platforms';
 import { TOOLBAR_ROW } from '@/lib/layout';
 
+const HIDDEN_CONVERSATIONS_KEY = 'hiddenConversationIds';
+
+function readHiddenConversationIds(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(HIDDEN_CONVERSATIONS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((value): value is string => typeof value === 'string');
+  } catch {
+    return [];
+  }
+}
+
+function writeHiddenConversationIds(ids: string[]) {
+  window.localStorage.setItem(HIDDEN_CONVERSATIONS_KEY, JSON.stringify(ids));
+}
+
 type Conversation = ReturnType<typeof useConversationFilter>['conversations'][number];
 
 interface ConversationCardProps {
   conversation: Conversation;
   onClick: (conversationId: string) => void;
+  hidden: boolean;
+  onToggleHidden: (conversationId: string) => void;
 }
 
-function ConversationCard({ conversation, onClick }: ConversationCardProps) {
+function ConversationCard({ conversation, onClick, hidden, onToggleHidden }: ConversationCardProps) {
   const getDisplayName = (conv: Conversation) => {
     if (conv.participants && conv.participants.length > 0) {
       if (conv.participants.length === 1) {
@@ -60,7 +81,9 @@ function ConversationCard({ conversation, onClick }: ConversationCardProps) {
 
   return (
     <div
-      className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 cursor-pointer hover:shadow-md hover:border-gray-300 transition-all duration-200 relative overflow-hidden"
+      className={`bg-white rounded-lg shadow-sm border p-6 cursor-pointer hover:shadow-md transition-all duration-200 relative overflow-hidden ${
+        hidden ? 'border-dashed border-gray-300 opacity-80' : 'border-gray-200 hover:border-gray-300'
+      }`}
       onClick={() => onClick(conversation.conversation_id)}
     >
       <div className={`absolute left-0 top-0 bottom-0 w-1 ${accent.dot}`} aria-hidden />
@@ -105,6 +128,17 @@ function ConversationCard({ conversation, onClick }: ConversationCardProps) {
 
         <ArrowRight className="w-5 h-5 text-gray-400 shrink-0 ml-2" />
       </div>
+      <button
+        type="button"
+        className="mt-4 inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggleHidden(conversation.conversation_id);
+        }}
+      >
+        {hidden ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+        {hidden ? 'Unhide' : 'Hide'}
+      </button>
     </div>
   );
 }
@@ -116,9 +150,12 @@ interface ConversationListProps {
 export function ConversationList({ onConversationSelect }: ConversationListProps) {
   const { conversations, isLoading, platforms } = useConversationFilter();
   const [filteredConversations, setFilteredConversations] = useState<Conversation[]>([]);
+  const [hiddenConversations, setHiddenConversations] = useState<string[]>(readHiddenConversationIds);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'messages' | 'recent' | 'duration'>('messages');
   const [platformFilter, setPlatformFilter] = useState<string | 'all'>('all');
+  const [showHidden, setShowHidden] = useState(false);
+  const hiddenConversationSet = useMemo(() => new Set(hiddenConversations), [hiddenConversations]);
 
   const availablePlatforms = useMemo(() => {
     if (platforms.length > 0) return platforms;
@@ -144,6 +181,7 @@ export function ConversationList({ onConversationSelect }: ConversationListProps
 
     let filtered = conversations.filter((conv) => {
       if ((conv.total_messages || 0) <= 5) return false;
+      if (!showHidden && hiddenConversationSet.has(conv.conversation_id)) return false;
       if (platformFilter !== 'all' && conv.source !== platformFilter) return false;
 
       if (!searchTerm) return true;
@@ -169,7 +207,17 @@ export function ConversationList({ onConversationSelect }: ConversationListProps
     });
 
     setFilteredConversations(filtered);
-  }, [conversations, searchTerm, sortBy, platformFilter]);
+  }, [conversations, searchTerm, sortBy, platformFilter, hiddenConversationSet, showHidden]);
+
+  const toggleConversationHidden = (conversationId: string) => {
+    setHiddenConversations((current) => {
+      const next = current.includes(conversationId)
+        ? current.filter((id) => id !== conversationId)
+        : [...current, conversationId];
+      writeHiddenConversationIds(next);
+      return next;
+    });
+  };
 
   if (isLoading) {
     return (
@@ -255,6 +303,19 @@ export function ConversationList({ onConversationSelect }: ConversationListProps
         </div>
 
         <div className="flex space-x-2">
+          {hiddenConversations.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowHidden((current) => !current)}
+              className={`px-4 py-2 rounded-lg border transition-colors ${
+                showHidden
+                  ? 'bg-gray-900 text-white border-gray-900'
+                  : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
+              }`}
+            >
+              {showHidden ? 'Hide hidden rows' : `Show hidden (${hiddenConversations.length})`}
+            </button>
+          )}
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as 'messages' | 'recent' | 'duration')}
@@ -312,6 +373,8 @@ export function ConversationList({ onConversationSelect }: ConversationListProps
             key={conversation.conversation_id}
             conversation={conversation}
             onClick={onConversationSelect}
+            hidden={hiddenConversationSet.has(conversation.conversation_id)}
+            onToggleHidden={toggleConversationHidden}
           />
         ))}
       </div>
@@ -321,7 +384,9 @@ export function ConversationList({ onConversationSelect }: ConversationListProps
           <div className="text-gray-500">
             {searchTerm || platformFilter !== 'all'
               ? 'No conversations match your filters.'
-              : 'No conversations found.'}
+              : hiddenConversations.length > 0 && !showHidden
+                ? 'All visible conversations are hidden. Use "Show hidden" to review and unhide them.'
+                : 'No conversations found.'}
           </div>
         </div>
       )}

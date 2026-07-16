@@ -191,13 +191,14 @@ export function URLDomainChart() {
   };
 
   return (
-    <div className="h-full">
+    <div className="flex h-full flex-col">
       {isFiltered && (
-        <div className="mb-2 text-center text-xs text-blue-600">
+        <div className="mb-1 shrink-0 text-center text-xs text-blue-600">
           Filtered across {selectedConversations.length} selected conversation{selectedConversations.length !== 1 ? 's' : ''}
         </div>
       )}
-      
+
+      <div className="min-h-0 flex-1">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart 
           data={chartData} 
@@ -254,6 +255,7 @@ export function URLDomainChart() {
           </Bar>
         </BarChart>
       </ResponsiveContainer>
+      </div>
     </div>
   );
 } 

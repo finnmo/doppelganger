@@ -112,8 +112,8 @@ function rebuildPatternsFromStarters(starters: ConversationStarter[]): {
   return {
     starter_patterns,
     summary: {
-      total_conversations: starters.length,
-      total_starters: starter_patterns.length,
+      total_conversations: new Set(starters.map(s => s.conversation_id)).size,
+      total_starters: starters.length,
       most_prolific_starter: starter_patterns[0]?.starter_sender || 'N/A'
     }
   };
@@ -181,11 +181,11 @@ export function ConversationStarterAnalysis() {
   }
 
   const topStarters = data.starter_patterns.slice(0, 6);
+  const totalSessions = data.summary.total_starters;
   const singleConversation = isFiltered && selectedConversations.length === 1;
-  const sessionLabel = singleConversation ? 'sessions started' : 'sessions started';
   const headerLabel = singleConversation
-    ? `${data.summary.total_starters} people restarted this chat ${data.summary.total_conversations} times`
-    : `${data.summary.total_starters} people started ${data.summary.total_conversations} sessions`;
+    ? `${totalSessions.toLocaleString()} chat sessions detected (4h+ gap between messages)`
+    : `${totalSessions.toLocaleString()} chat sessions across ${data.summary.total_conversations.toLocaleString()} conversations`;
 
   return (
     <div className="space-y-4">
@@ -216,7 +216,7 @@ export function ConversationStarterAnalysis() {
 
               <div className="text-2xl font-bold text-blue-600 mb-2">
                 {starter.total_conversations_started}
-                <span className="text-sm font-normal text-gray-500 ml-1">{sessionLabel}</span>
+                <span className="text-sm font-normal text-gray-500 ml-1">sessions started</span>
               </div>
 
               <div className="space-y-1 text-sm text-gray-600">

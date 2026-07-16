@@ -79,7 +79,7 @@ export function MediaInsightsPanel() {
   return (
     <div className="space-y-6">
       {/* Media Share Rate */}
-      <div className="bg-gradient-to-br from-orange-400 to-orange-500 rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
+      <div className="bg-gradient-to-br from-orange-400 to-orange-500 rounded-xl p-4 text-white shadow-sm">
         <div className="flex items-center mb-4">
           <Camera className="w-6 h-6 mr-2" />
           <h3 className="text-xl font-bold">Media Share Rate</h3>
@@ -103,7 +103,7 @@ export function MediaInsightsPanel() {
       </div>
 
       {/* Preferred Format */}
-      <div className="bg-gradient-to-br from-blue-400 to-blue-500 rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
+      <div className="bg-gradient-to-br from-blue-400 to-blue-500 rounded-xl p-4 text-white shadow-sm">
         <div className="flex items-center mb-4">
           <FileImage className="w-6 h-6 mr-2" />
           <h3 className="text-xl font-bold">Preferred Format</h3>
@@ -129,7 +129,7 @@ export function MediaInsightsPanel() {
       </div>
 
       {/* Reaction Rate */}
-      <div className="bg-gradient-to-br from-green-400 to-green-500 rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
+      <div className="bg-gradient-to-br from-green-400 to-green-500 rounded-xl p-4 text-white shadow-sm">
         <div className="flex items-center mb-4">
           <ThumbsUp className="w-6 h-6 mr-2" />
           <h3 className="text-xl font-bold">Reaction Rate</h3>

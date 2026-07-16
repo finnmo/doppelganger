@@ -143,7 +143,7 @@ export function ImportantMessagesAnalysis() {
       </div>
 
       {/* Messages List */}
-      <div className="space-y-3 max-h-96 overflow-y-auto">
+      <div className="space-y-3">
         {displayedMessages.map((message, index) => {
           const isExpanded = expandedMessages.has(message.message_id);
           const needsTruncation = shouldTruncate(message.content);

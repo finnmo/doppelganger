@@ -5,8 +5,10 @@ import { ThreadVisualization } from '@/components/ThreadVisualization';
 import { TurnTakingAnalysis } from '@/components/TurnTakingAnalysis';
 import { EngagementScoring } from '@/components/EngagementScoring';
 import { ConversationStarterAnalysis } from '@/components/ConversationStarterAnalysis';
+import { ChartCard } from '@/components/ui/ChartCard';
 import { useConversationFilter } from '@/contexts/ConversationContext';
 import { Users, MessageSquare, GitBranch, Target } from 'lucide-react';
+import { GRID_GAP, TAB_STACK } from '@/lib/layout';
 
 interface ConversationSummary {
   totalConversations: number;
@@ -22,6 +24,12 @@ function formatDuration(durationMs: number): string {
   return `${Math.round(durationMs / (60 * 60 * 1000))}h`;
 }
 
+/**
+ * Conversations & Threads — single-screen grid.
+ * Row 1: four summary stat tiles.
+ * Row 2: thread depth · turn-taking · engagement scores · starter analysis
+ * (each scrolls internally so the page never grows).
+ */
 export function ConversationsTab() {
   const [summary, setSummary] = useState<ConversationSummary | null>(null);
   const { selectedConversations, isFiltered } = useConversationFilter();
@@ -67,120 +75,97 @@ export function ConversationsTab() {
     loadSummary();
   }, [selectedConversations, isFiltered]);
 
+  const tiles = [
+    {
+      label: 'Total Conversations',
+      value: summary ? summary.totalConversations.toLocaleString() : '—',
+      hint: 'Active conversation threads',
+      classes: 'bg-blue-50 border-blue-100 text-blue-600',
+    },
+    {
+      label: 'Avg Participants',
+      value: summary ? summary.averageParticipants.toFixed(1) : '—',
+      hint: 'People per conversation',
+      classes: 'bg-green-50 border-green-100 text-green-600',
+    },
+    {
+      label: 'Avg Turns',
+      value: summary ? Math.round(summary.averageTurns).toLocaleString() : '—',
+      hint: 'Back-and-forth exchanges',
+      classes: 'bg-purple-50 border-purple-100 text-purple-600',
+    },
+    {
+      label: 'Avg Duration',
+      value: summary ? formatDuration(summary.averageDuration) : '—',
+      hint: 'Conversation lifespan',
+      classes: 'bg-orange-50 border-orange-100 text-orange-600',
+    },
+  ];
+
   return (
-    <div className="space-y-6 sm:space-y-8">
-      {/* Header */}
-      <div className="relative">
-        <div className="absolute inset-0 bg-gradient-to-r from-green-50 via-teal-50 to-blue-50 rounded-2xl opacity-40"></div>
-        <div className="relative p-4 sm:p-6">
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 flex flex-wrap items-center gap-2 mb-1">
-            <Users className="w-7 h-7 sm:w-8 sm:h-8 text-green-600 shrink-0" />
-            Conversations & Thread Analysis
-          </h2>
-          <p className="text-base sm:text-lg text-gray-600">
-            Conversation structure, thread depth analysis, and participant engagement patterns
-          </p>
-        </div>
-      </div>
-
-      {/* Conversation Overview */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
-        {/* Conversation Metrics Overview */}
-        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm border min-w-0">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex flex-wrap items-center gap-2">
-            <MessageSquare className="w-5 h-5 text-blue-500 shrink-0" />
-            Conversation Metrics Overview
-          </h3>
-          <p className="text-sm text-gray-600 mb-4">
-            Key metrics for conversation engagement and participation
-          </p>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-blue-50 p-4 rounded border border-blue-100">
-              <div className="text-sm font-medium text-gray-700">Total Conversations</div>
-              <div className="text-2xl font-bold text-blue-600">
-                {summary ? summary.totalConversations.toLocaleString() : '—'}
-              </div>
-              <div className="text-xs text-gray-500">Active conversation threads</div>
-            </div>
-            <div className="bg-green-50 p-4 rounded border border-green-100">
-              <div className="text-sm font-medium text-gray-700">Avg Participants</div>
-              <div className="text-2xl font-bold text-green-600">
-                {summary ? summary.averageParticipants.toFixed(1) : '—'}
-              </div>
-              <div className="text-xs text-gray-500">People per conversation</div>
-            </div>
-            <div className="bg-purple-50 p-4 rounded border border-purple-100">
-              <div className="text-sm font-medium text-gray-700">Avg Turns</div>
-              <div className="text-2xl font-bold text-purple-600">
-                {summary ? Math.round(summary.averageTurns).toLocaleString() : '—'}
-              </div>
-              <div className="text-xs text-gray-500">Back-and-forth exchanges</div>
-            </div>
-            <div className="bg-orange-50 p-4 rounded border border-orange-100">
-              <div className="text-sm font-medium text-gray-700">Avg Duration</div>
-              <div className="text-2xl font-bold text-orange-600">
-                {summary ? formatDuration(summary.averageDuration) : '—'}
-              </div>
-              <div className="text-xs text-gray-500">Conversation lifespan</div>
-            </div>
+    <div className={TAB_STACK}>
+      <div className={`grid grid-cols-2 xl:grid-cols-4 ${GRID_GAP}`}>
+        {tiles.map(tile => (
+          <div key={tile.label} className={`rounded-xl border p-3 sm:p-4 ${tile.classes.split(' ').slice(0, 2).join(' ')}`}>
+            <div className="text-xs font-medium text-gray-700 sm:text-sm">{tile.label}</div>
+            <div className={`text-xl font-bold sm:text-2xl ${tile.classes.split(' ')[2]}`}>{tile.value}</div>
+            <div className="text-xs text-gray-500">{tile.hint}</div>
           </div>
-        </div>
+        ))}
+      </div>
 
-        {/* Thread Depth Visualization */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <GitBranch className="w-5 h-5 mr-2 text-green-500" />
-            Thread Depth Visualization
-          </h3>
-          <p className="text-sm text-gray-600 mb-4">
-            Visual representation of conversation threads and reply chains
-          </p>
-
+      <div className={`grid grid-cols-1 lg:grid-cols-2 ${GRID_GAP}`}>
+        <ChartCard
+          title="Thread Depth Visualization"
+          icon={GitBranch}
+          accent="green"
+          tooltip={{
+            description:
+              'Visual representation of conversation threads and reply chains.',
+          }}
+          bodyClassName='h-60 overflow-y-auto'
+        >
           <ThreadVisualization />
-        </div>
-      </div>
+        </ChartCard>
 
-      {/* Advanced Conversation Analysis */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Turn-taking Patterns */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <MessageSquare className="w-5 h-5 mr-2 text-indigo-500" />
-            Turn-taking Patterns
-          </h3>
-          <p className="text-sm text-gray-600 mb-4">
-            How conversation participants take turns and engage with each other
-          </p>
-
+        <ChartCard
+          title="Turn-taking Patterns"
+          icon={MessageSquare}
+          accent="indigo"
+          tooltip={{
+            description:
+              'How conversation participants take turns and engage with each other.',
+          }}
+          bodyClassName='h-60 overflow-y-auto'
+        >
           <TurnTakingAnalysis />
-        </div>
+        </ChartCard>
 
-        {/* Participant Engagement Scores */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <Users className="w-5 h-5 mr-2 text-red-500" />
-            Participant Engagement Scores
-          </h3>
-          <p className="text-sm text-gray-600 mb-4">
-            Engagement levels and participation patterns for each conversation member
-          </p>
-
+        <ChartCard
+          title="Participant Engagement Scores"
+          icon={Users}
+          accent="red"
+          tooltip={{
+            description:
+              'Engagement levels and participation patterns for each conversation member.',
+          }}
+          bodyClassName='h-60 overflow-y-auto'
+        >
           <EngagementScoring />
-        </div>
-      </div>
+        </ChartCard>
 
-      {/* Conversation Starter Analysis */}
-      <div className="bg-white p-6 rounded-lg shadow-sm border">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-          <Target className="w-5 h-5 mr-2 text-orange-500" />
-          Conversation Starter Analysis
-        </h3>
-        <p className="text-sm text-gray-600 mb-4">
-          Who initiates conversations, how they usually open, and when
-        </p>
-
-        <ConversationStarterAnalysis />
+        <ChartCard
+          title="Conversation Starter Analysis"
+          icon={Target}
+          accent="orange"
+          tooltip={{
+            description:
+              'Who initiates conversations, how they usually open, and when.',
+          }}
+          bodyClassName='h-60 overflow-y-auto'
+        >
+          <ConversationStarterAnalysis />
+        </ChartCard>
       </div>
     </div>
   );

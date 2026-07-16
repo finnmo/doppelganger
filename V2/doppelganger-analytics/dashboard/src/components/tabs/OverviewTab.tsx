@@ -1,22 +1,22 @@
 'use client';
 
 import React from 'react';
-import { BarChart3 } from 'lucide-react';
+import { TrendingUp } from 'lucide-react';
 import { useConversationFilter } from '@/contexts/ConversationContext';
-import { useTheme } from '@/contexts/ThemeContext';
 import { computeFilteredOverviewMetrics } from '@/lib/overviewAggregate';
 import { useOverviewData } from './overview/useOverviewData';
 import { computeParticipantAnalytics } from './overview/participants';
 import { overallAverageResponseTime } from './overview/responseTime';
 import { HeroMetrics } from './overview/HeroMetrics';
 import { ParticipantAnalytics } from './overview/ParticipantAnalytics';
-import { ActivityAnalytics } from './overview/ActivityAnalytics';
 import { PlatformSourcesBar } from '@/components/PlatformSourcesBar';
+import { PeakActivityChart } from '@/components/PeakActivityChart';
+import { ChartCard } from '@/components/ui/ChartCard';
+import { CHART_MD, GRID_GAP, TAB_STACK } from '@/lib/layout';
 
 export function OverviewTab() {
   const { data, loading } = useOverviewData();
   const { selectedConversations, isFiltered, platforms, conversations } = useConversationFilter();
-  const { themeStyle, getThemeClasses } = useTheme();
 
   // Headline metrics scoped to the current selection.
   const filteredMetrics = React.useMemo(() => {
@@ -128,34 +128,37 @@ export function OverviewTab() {
     filteredMetrics.filteredLatency
   );
 
-  const themeClasses = getThemeClasses();
-
   return (
-    <div className={themeClasses.spacingClass}>
-      {/* Header */}
-      <div className="relative">
-        <div className={`absolute inset-0 ${themeClasses.headerGradientClass}`}></div>
-        <div className={`relative ${themeStyle === 'modern' ? 'p-8' : 'p-6'}`}>
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 flex flex-wrap items-center gap-2 mb-1">
-            <BarChart3 className="w-8 h-8 mr-3 text-blue-600" />
-            Overview of Conversation
-          </h2>
-          <p className="text-lg text-gray-600">
-            Comprehensive insights and patterns across your conversations
-          </p>
-        </div>
-      </div>
-
+    <div className={TAB_STACK}>
       <PlatformSourcesBar platforms={platformsForView} activeSource={activeSource} />
 
-      <HeroMetrics metrics={filteredMetrics} avgResponseTime={avgResponseTime} />
+      {/* Hero metrics render as `contents`, so they share this row with the
+          peak-activity chart: 4 cards across on xl. */}
+      <div className={`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 ${GRID_GAP}`}>
+        <HeroMetrics metrics={filteredMetrics} avgResponseTime={avgResponseTime} />
+
+        <ChartCard
+          title="Peak Activity Patterns"
+          icon={TrendingUp}
+          accent="green"
+          tooltip={{
+            description:
+              'Visual analysis showing when communication is most active during different hours and days, revealing your natural communication rhythm.',
+            calculation:
+              'Messages are analyzed by hour and day of week to identify peak activity periods and patterns',
+            example:
+              "You might discover you're most active Tuesday-Thursday from 2-4 PM, or that weekends show completely different patterns.",
+          }}
+          bodyClassName={CHART_MD}
+        >
+          <PeakActivityChart />
+        </ChartCard>
+      </div>
 
       <ParticipantAnalytics
         participants={participants}
         totalMessages={filteredMetrics.textMetrics.totalMessages}
       />
-
-      <ActivityAnalytics />
     </div>
   );
 }

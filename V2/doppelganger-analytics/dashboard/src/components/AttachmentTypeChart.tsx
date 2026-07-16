@@ -153,8 +153,8 @@ export function AttachmentTypeChart() {
   const totalCount = data.reduce((sum, item) => sum + item.count, 0);
 
   return (
-    <div className="h-96">
-      <div className="mb-4 text-center">
+    <div className="flex h-full flex-col">
+      <div className="mb-2 shrink-0 text-center">
         <div className="text-sm text-gray-600">
           Total Attachments: {totalCount.toLocaleString()}
         </div>
@@ -168,6 +168,7 @@ export function AttachmentTypeChart() {
         )}
       </div>
       
+      <div className="min-h-0 flex-1">
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
@@ -179,6 +180,7 @@ export function AttachmentTypeChart() {
             outerRadius={80}
             fill="#8884d8"
             dataKey="count"
+            nameKey="type"
           >
             {data.map((entry, index) => (
               <Cell 
@@ -215,6 +217,7 @@ export function AttachmentTypeChart() {
           />
         </PieChart>
       </ResponsiveContainer>
+      </div>
     </div>
   );
-} 
+}

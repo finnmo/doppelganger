@@ -81,9 +81,9 @@ export function ActivityInsightsPanel() {
   const speedLabel = totalReplies === 0 ? '—' : fast / totalReplies >= 0.5 ? 'Fast' : fast / totalReplies >= 0.25 ? 'Moderate' : 'Slow';
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+    <div className="grid grid-cols-1 gap-3">
       {/* Peak Hour */}
-      <div className="bg-gradient-to-br from-orange-400 to-orange-500 rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
+      <div className="bg-gradient-to-br from-orange-400 to-orange-500 rounded-xl p-4 text-white shadow-sm">
         <div className="flex items-center mb-4">
           <Clock className="w-6 h-6 mr-2" />
           <h3 className="text-xl font-bold">Peak Hour</h3>
@@ -105,7 +105,7 @@ export function ActivityInsightsPanel() {
       </div>
 
       {/* Response Speed */}
-      <div className="bg-gradient-to-br from-green-400 to-green-500 rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
+      <div className="bg-gradient-to-br from-green-400 to-green-500 rounded-xl p-4 text-white shadow-sm">
         <div className="flex items-center mb-4">
           <Zap className="w-6 h-6 mr-2" />
           <h3 className="text-xl font-bold">Response Speed</h3>
@@ -131,7 +131,7 @@ export function ActivityInsightsPanel() {
       </div>
 
       {/* Busiest Time of Day */}
-      <div className="bg-gradient-to-br from-blue-400 to-blue-500 rounded-2xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
+      <div className="bg-gradient-to-br from-blue-400 to-blue-500 rounded-xl p-4 text-white shadow-sm">
         <div className="flex items-center mb-4">
           <Sun className="w-6 h-6 mr-2" />
           <h3 className="text-xl font-bold">Busiest Window</h3>

@@ -133,8 +133,8 @@ export function MediaBySenderChart() {
   };
 
   return (
-    <div className="h-96">
-      <div className="mb-4 text-center">
+    <div className="flex h-full flex-col">
+      <div className="mb-2 shrink-0 text-center">
         <div className="text-sm text-gray-600">
           Top Media Sharers
         </div>
@@ -149,19 +149,20 @@ export function MediaBySenderChart() {
         </div>
       )}
       
+      <div className="min-h-0 flex-1">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart 
+        <BarChart
           data={data} 
-          margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+          margin={{ top: 5, right: 20, left: 10, bottom: 0 }}
         >
           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-          <XAxis 
+          <XAxis
             dataKey="sender"
             stroke="#6b7280"
             fontSize={11}
             angle={-45}
             textAnchor="end"
-            height={60}
+            height={50}
             tickFormatter={(value) => truncateName(value)}
           />
           <YAxis 
@@ -194,8 +195,9 @@ export function MediaBySenderChart() {
           </Bar>
         </BarChart>
       </ResponsiveContainer>
-      
-      <div className="mt-4 text-xs text-gray-500 text-center">
+      </div>
+
+      <div className="mt-1 shrink-0 text-xs text-gray-500 text-center">
         Bar colors indicate each sender&apos;s most shared media type
         {data.length === 0 && (
           <div className="mt-2 text-orange-600">

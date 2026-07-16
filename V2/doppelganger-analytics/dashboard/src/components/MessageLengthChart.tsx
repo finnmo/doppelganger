@@ -139,7 +139,7 @@ export function MessageLengthChart() {
   ) : { range: 'N/A', percentage: 0 };
 
   return (
-    <div className="h-80">
+    <div className="flex h-full flex-col">
       {/* Stats Header */}
       <div className="mb-3 grid grid-cols-1 gap-3 text-center sm:grid-cols-3 sm:gap-4">
         <div className="bg-gray-50 p-2 rounded">
@@ -162,7 +162,7 @@ export function MessageLengthChart() {
         </div>
       )}
       
-      <div className="h-48">
+      <div className="min-h-0 flex-1">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart 
             data={data} 

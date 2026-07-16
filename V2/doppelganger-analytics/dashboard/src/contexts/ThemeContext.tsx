@@ -103,19 +103,19 @@ const themes: Record<ThemeStyle, ThemeConfig> = {
     },
     shadows: {
       sm: 'shadow-sm',
-      md: 'shadow-md',
-      lg: 'shadow-lg hover:shadow-xl',
-      xl: 'shadow-xl hover:shadow-2xl',
+      md: 'shadow-sm',
+      lg: 'shadow-sm',
+      xl: 'shadow-md',
     },
     borderRadius: {
-      sm: 'rounded-lg',
-      md: 'rounded-xl',
-      lg: 'rounded-2xl',
-      xl: 'rounded-3xl',
+      sm: 'rounded-md',
+      md: 'rounded-lg',
+      lg: 'rounded-xl',
+      xl: 'rounded-xl',
     },
     spacing: {
-      card: 'p-8',
-      section: 'space-y-10',
+      card: 'p-4',
+      section: 'space-y-4',
     },
   },
   classic: {
@@ -153,8 +153,8 @@ const themes: Record<ThemeStyle, ThemeConfig> = {
       xl: 'rounded-xl',
     },
     spacing: {
-      card: 'p-6',
-      section: 'space-y-8',
+      card: 'p-4',
+      section: 'space-y-4',
     },
   },
 };
@@ -231,50 +231,51 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   const getThemeClasses = () => {
     const isModern = themeStyle === 'modern';
     
-    // Predefined gradient classes for section headers to avoid Tailwind purging
+    // Slim gradient strips for section headers (kept for any remaining
+    // consumers; the dense layout uses ChartCard's 3px accent strip instead).
     const sectionHeaderGradients = {
-      blue: 'bg-gradient-to-r from-blue-400 to-blue-500 text-white p-4 sm:p-6 rounded-t-2xl',
-      green: 'bg-gradient-to-r from-green-400 to-green-500 text-white p-4 sm:p-6 rounded-t-2xl',
-      purple: 'bg-gradient-to-r from-purple-400 to-purple-500 text-white p-4 sm:p-6 rounded-t-2xl',
-      orange: 'bg-gradient-to-r from-orange-400 to-orange-500 text-white p-4 sm:p-6 rounded-t-2xl',
-      red: 'bg-gradient-to-r from-red-400 to-red-500 text-white p-4 sm:p-6 rounded-t-2xl',
-      yellow: 'bg-gradient-to-r from-yellow-400 to-yellow-500 text-white p-4 sm:p-6 rounded-t-2xl',
-      indigo: 'bg-gradient-to-r from-indigo-400 to-indigo-500 text-white p-4 sm:p-6 rounded-t-2xl',
-      pink: 'bg-gradient-to-r from-pink-400 to-pink-500 text-white p-4 sm:p-6 rounded-t-2xl',
+      blue: 'bg-gradient-to-r from-blue-400 to-blue-500 text-white px-4 py-2 rounded-t-xl',
+      green: 'bg-gradient-to-r from-green-400 to-green-500 text-white px-4 py-2 rounded-t-xl',
+      purple: 'bg-gradient-to-r from-purple-400 to-purple-500 text-white px-4 py-2 rounded-t-xl',
+      orange: 'bg-gradient-to-r from-orange-400 to-orange-500 text-white px-4 py-2 rounded-t-xl',
+      red: 'bg-gradient-to-r from-red-400 to-red-500 text-white px-4 py-2 rounded-t-xl',
+      yellow: 'bg-gradient-to-r from-yellow-400 to-yellow-500 text-white px-4 py-2 rounded-t-xl',
+      indigo: 'bg-gradient-to-r from-indigo-400 to-indigo-500 text-white px-4 py-2 rounded-t-xl',
+      pink: 'bg-gradient-to-r from-pink-400 to-pink-500 text-white px-4 py-2 rounded-t-xl',
     };
 
     // Hero cards should match other cards - white background with colored left border
     const heroCardClasses = {
       blue: isModern 
-        ? 'bg-white border-l-4 border-blue-500 rounded-2xl p-4 sm:p-6 lg:p-8 shadow-lg hover:shadow-xl transition-shadow border border-gray-200'
-        : 'bg-white border-l-4 border-blue-600 rounded-lg p-4 sm:p-6 shadow-sm border border-gray-300',
+        ? 'bg-white border-l-4 border-blue-500 rounded-xl p-4 shadow-sm border border-gray-200'
+        : 'bg-white border-l-4 border-blue-600 rounded-lg p-4 shadow-sm border border-gray-300',
       orange: isModern 
-        ? 'bg-white border-l-4 border-orange-500 rounded-2xl p-4 sm:p-6 lg:p-8 shadow-lg hover:shadow-xl transition-shadow border border-gray-200'
-        : 'bg-white border-l-4 border-orange-600 rounded-lg p-4 sm:p-6 shadow-sm border border-gray-300',
+        ? 'bg-white border-l-4 border-orange-500 rounded-xl p-4 shadow-sm border border-gray-200'
+        : 'bg-white border-l-4 border-orange-600 rounded-lg p-4 shadow-sm border border-gray-300',
       green: isModern 
-        ? 'bg-white border-l-4 border-green-500 rounded-2xl p-4 sm:p-6 lg:p-8 shadow-lg hover:shadow-xl transition-shadow border border-gray-200'
-        : 'bg-white border-l-4 border-green-600 rounded-lg p-4 sm:p-6 shadow-sm border border-gray-300',
+        ? 'bg-white border-l-4 border-green-500 rounded-xl p-4 shadow-sm border border-gray-200'
+        : 'bg-white border-l-4 border-green-600 rounded-lg p-4 shadow-sm border border-gray-300',
       purple: isModern 
-        ? 'bg-white border-l-4 border-purple-500 rounded-2xl p-4 sm:p-6 lg:p-8 shadow-lg hover:shadow-xl transition-shadow border border-gray-200'
-        : 'bg-white border-l-4 border-purple-600 rounded-lg p-4 sm:p-6 shadow-sm border border-gray-300',
+        ? 'bg-white border-l-4 border-purple-500 rounded-xl p-4 shadow-sm border border-gray-200'
+        : 'bg-white border-l-4 border-purple-600 rounded-lg p-4 shadow-sm border border-gray-300',
       red: isModern 
-        ? 'bg-white border-l-4 border-red-500 rounded-2xl p-4 sm:p-6 lg:p-8 shadow-lg hover:shadow-xl transition-shadow border border-gray-200'
-        : 'bg-white border-l-4 border-red-600 rounded-lg p-4 sm:p-6 shadow-sm border border-gray-300',
+        ? 'bg-white border-l-4 border-red-500 rounded-xl p-4 shadow-sm border border-gray-200'
+        : 'bg-white border-l-4 border-red-600 rounded-lg p-4 shadow-sm border border-gray-300',
       yellow: isModern 
-        ? 'bg-white border-l-4 border-yellow-500 rounded-2xl p-4 sm:p-6 lg:p-8 shadow-lg hover:shadow-xl transition-shadow border border-gray-200'
-        : 'bg-white border-l-4 border-yellow-600 rounded-lg p-4 sm:p-6 shadow-sm border border-gray-300',
+        ? 'bg-white border-l-4 border-yellow-500 rounded-xl p-4 shadow-sm border border-gray-200'
+        : 'bg-white border-l-4 border-yellow-600 rounded-lg p-4 shadow-sm border border-gray-300',
       indigo: isModern 
-        ? 'bg-white border-l-4 border-indigo-500 rounded-2xl p-4 sm:p-6 lg:p-8 shadow-lg hover:shadow-xl transition-shadow border border-gray-200'
-        : 'bg-white border-l-4 border-indigo-600 rounded-lg p-4 sm:p-6 shadow-sm border border-gray-300',
+        ? 'bg-white border-l-4 border-indigo-500 rounded-xl p-4 shadow-sm border border-gray-200'
+        : 'bg-white border-l-4 border-indigo-600 rounded-lg p-4 shadow-sm border border-gray-300',
       pink: isModern 
-        ? 'bg-white border-l-4 border-pink-500 rounded-2xl p-4 sm:p-6 lg:p-8 shadow-lg hover:shadow-xl transition-shadow border border-gray-200'
-        : 'bg-white border-l-4 border-pink-600 rounded-lg p-4 sm:p-6 shadow-sm border border-gray-300',
+        ? 'bg-white border-l-4 border-pink-500 rounded-xl p-4 shadow-sm border border-gray-200'
+        : 'bg-white border-l-4 border-pink-600 rounded-lg p-4 shadow-sm border border-gray-300',
     };
     
     return {
       cardClass: isModern 
-        ? `bg-white ${currentTheme.borderRadius.xl} border border-gray-200 ${currentTheme.shadows.lg} transition-shadow hover:shadow-xl p-4 sm:p-6 lg:p-8`
-        : `bg-white p-4 sm:p-6 rounded-lg shadow-sm border`,
+        ? `bg-white ${currentTheme.borderRadius.xl} border border-gray-200 shadow-sm p-4`
+        : `bg-white p-4 rounded-lg shadow-sm border`,
       
       headerGradientClass: isModern
         ? `bg-gradient-to-r ${currentTheme.gradients.surface} ${currentTheme.borderRadius.xl} opacity-40`
@@ -290,23 +291,23 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
       
       // Modern section cards use flush header + content padding (no double p-8)
       sectionCardClass: isModern
-        ? `bg-white ${currentTheme.borderRadius.xl} border border-gray-200 ${currentTheme.shadows.lg} transition-shadow hover:shadow-xl overflow-hidden`
-        : `bg-white p-4 sm:p-6 rounded-lg shadow-sm border`,
+        ? `bg-white ${currentTheme.borderRadius.xl} border border-gray-200 shadow-sm overflow-hidden`
+        : `bg-white p-4 rounded-lg shadow-sm border`,
       
       // For section headers within cards - only used in modern theme
       sectionHeaderClass: (color: string) => 
         sectionHeaderGradients[color as keyof typeof sectionHeaderGradients] || sectionHeaderGradients.blue,
       
       // For section content - only used in modern theme  
-      sectionContentClass: 'p-4 sm:p-6',
+      sectionContentClass: 'p-3 sm:p-4',
       
       // For simple section titles in classic theme
-      sectionTitleClass: 'text-lg font-semibold text-gray-900 mb-4 sm:mb-6 flex flex-wrap items-center gap-2',
+      sectionTitleClass: 'text-sm font-semibold text-gray-900 mb-2 flex flex-wrap items-center gap-2',
       
       textClass: `text-${currentTheme.colors.text}`,
       borderClass: `border-${currentTheme.colors.border}`,
       shadowClass: currentTheme.shadows.lg,
-      spacingClass: isModern ? 'space-y-6 sm:space-y-10' : 'space-y-6 sm:space-y-8',
+      spacingClass: 'space-y-3 sm:space-y-4',
     };
   };
 

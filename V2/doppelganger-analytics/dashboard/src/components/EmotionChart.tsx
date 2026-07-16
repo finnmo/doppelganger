@@ -203,6 +203,7 @@ export function EmotionChart() {
             outerRadius={80}
             fill="#8884d8"
             dataKey="total"
+            nameKey="emotion"
           >
             {data.map((entry, index) => (
               <Cell 
@@ -212,7 +213,12 @@ export function EmotionChart() {
             ))}
           </Pie>
             <Tooltip 
-              formatter={(value, name) => [`${Number(value).toFixed(2)} (${(Number(value) / data.reduce((sum, item) => sum + item.total, 0) * 100).toFixed(1)}%)`, name]}
+              formatter={(value, _name, item) => {
+                const total = data.reduce((sum, row) => sum + row.total, 0);
+                const pct = total > 0 ? (Number(value) / total) * 100 : 0;
+                const emotionName = String(item?.payload?.emotion ?? 'Emotion');
+                return [`${Number(value).toFixed(2)} (${pct.toFixed(1)}%)`, emotionName];
+              }}
               labelStyle={{ color: '#374151' }}
               contentStyle={{ 
                 backgroundColor: 'white', 

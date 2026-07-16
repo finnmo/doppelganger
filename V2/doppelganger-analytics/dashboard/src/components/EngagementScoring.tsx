@@ -186,11 +186,7 @@ export function EngagementScoring() {
 
   if (loading) {
     return (
-      <div className="bg-white p-6 rounded-lg shadow-sm border">
-        <div className="flex items-center space-x-2 mb-4">
-          <Award className="w-5 h-5 text-blue-600" />
-          <h3 className="text-lg font-semibold">Participant Engagement Scores</h3>
-        </div>
+      <div>
         <div className="flex items-center justify-center h-64">
           <div className="text-gray-500">Loading engagement data...</div>
         </div>
@@ -200,11 +196,7 @@ export function EngagementScoring() {
 
   if (error || !filteredData) {
     return (
-      <div className="bg-white p-6 rounded-lg shadow-sm border">
-        <div className="flex items-center space-x-2 mb-4">
-          <Award className="w-5 h-5 text-red-600" />
-          <h3 className="text-lg font-semibold">Participant Engagement Scores</h3>
-        </div>
+      <div>
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <MessageCircle className="w-12 h-12 text-gray-400 mx-auto mb-2" />
@@ -233,13 +225,10 @@ export function EngagementScoring() {
   }));
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-sm border">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-2">
-          <Award className="w-5 h-5 text-blue-600" />
-          <h3 className="text-lg font-semibold">Participant Engagement Scores</h3>
-        </div>
-        <div className="flex space-x-2">
+    <div>
+      {/* View mode selector (card title/tooltip live in the parent ChartCard) */}
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex flex-wrap gap-1.5">
           <button
             onClick={() => setViewMode('overview')}
             className={`px-3 py-1 rounded text-sm ${

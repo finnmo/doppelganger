@@ -7,8 +7,11 @@ import { TrendingUp, TrendingDown, Calendar, User, BarChart3 } from 'lucide-reac
 import { useConversationFilter } from '@/contexts/ConversationContext';
 import {
   buildTimelineFromDailyRows,
+  buildSenderTimelineFromDailyRows,
   summarizeTimeline,
-  type SentimentDailyRow
+  formatFullDate,
+  type SentimentDailyRow,
+  type SentimentDailyBySenderRow
 } from '@/lib/sentimentTimeline';
 
 interface SentimentTimePoint {
@@ -82,17 +85,17 @@ const SentimentTimelineChart: React.FC = () => {
             setSelectedSender(timelineData.senderTimelines[0].sender);
           }
         } else {
-          // Filter and recompute when conversations are selected. Daily rows
-          // (per conversation) rebuild the overall timeline; sentimentBySender
-          // provides the per-sender aggregates.
-          const [dailyResponse, sentimentResponse] = await Promise.all([
+          const [dailyResponse, dailySenderResponse, sentimentResponse] = await Promise.all([
             fetch('/data/sentimentDailyByConversation.json'),
+            fetch('/data/sentimentDailyBySender.json'),
             fetch('/data/sentimentBySender.json')
           ]);
 
-          // Older exports predate this file; the timeline is then honestly empty.
           const dailyRows: SentimentDailyRow[] = dailyResponse.ok
             ? await dailyResponse.json()
+            : [];
+          const dailySenderRows: SentimentDailyBySenderRow[] = dailySenderResponse.ok
+            ? await dailySenderResponse.json()
             : [];
 
           let sentimentData: RawSentimentData[] = await sentimentResponse.json();
@@ -110,7 +113,12 @@ const SentimentTimelineChart: React.FC = () => {
             return;
           }
 
-          const processedData = processFilteredSentimentData(sentimentData, overallTimeline);
+          const processedData = processFilteredSentimentData(
+            sentimentData,
+            overallTimeline,
+            Array.isArray(dailySenderRows) ? dailySenderRows : [],
+            selectedConversations
+          );
           setData(processedData);
           if (processedData.senderTimelines.length > 0) {
             setSelectedSender(processedData.senderTimelines[0].sender);
@@ -128,12 +136,12 @@ const SentimentTimelineChart: React.FC = () => {
 
   const processFilteredSentimentData = (
     sentimentData: RawSentimentData[],
-    overallTimeline: SentimentTimePoint[]
+    overallTimeline: SentimentTimePoint[],
+    dailySenderRows: SentimentDailyBySenderRow[],
+    selectedConversations: string[]
   ): SentimentTimelineData => {
     const uniqueSenders = [...new Set(sentimentData.map(item => item.sender))];
 
-    // Sender rows are aggregates only (no per-sender-per-day data when
-    // filtered), so their timeSeries stays empty.
     const senderTimelines: SentimentBySender[] = uniqueSenders.map(sender => {
       const senderData = sentimentData.filter(item => item.sender === sender);
       const totalMessages = senderData.reduce((sum, item) => sum + item.message_count, 0) || 1;
@@ -142,9 +150,13 @@ const SentimentTimelineChart: React.FC = () => {
       const avgNegative = senderData.reduce((sum, item) => sum + (item.avg_negative * item.message_count), 0) / totalMessages;
       const avgNeutral = senderData.reduce((sum, item) => sum + (item.avg_neutral * item.message_count), 0) / totalMessages;
 
+      const timeSeries = dailySenderRows.length > 0
+        ? buildSenderTimelineFromDailyRows(dailySenderRows, selectedConversations, sender)
+        : [];
+
       return {
         sender,
-        timeSeries: [],
+        timeSeries,
         overallSentiment: {
           avgCompound: Math.round(avgCompound * 1000) / 1000,
           avgPositive: Math.round(avgPositive * 1000) / 1000,
@@ -181,10 +193,7 @@ const SentimentTimelineChart: React.FC = () => {
     };
   };
 
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-  };
+  const formatDate = formatFullDate;
 
   const getSentimentIcon = (sentiment: number) => {
     if (sentiment > 0.1) return <TrendingUp className="w-4 h-4 text-green-500" />;
@@ -250,6 +259,37 @@ const SentimentTimelineChart: React.FC = () => {
   const currentData = viewMode === 'overall' 
     ? data.overallTimeline 
     : data.senderTimelines.find(s => s.sender === selectedSender)?.timeSeries || [];
+
+  if (viewMode === 'sender' && currentData.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 text-sm">
+          <div className="bg-blue-50 p-3 rounded">
+            <div className="text-blue-800 font-medium">{data.summary.totalDays}</div>
+            <div className="text-blue-600">Days Analyzed</div>
+          </div>
+          <div className="bg-green-50 p-3 rounded">
+            <div className="text-green-800 font-medium">{data.summary.avgDailySentiment.toFixed(3)}</div>
+            <div className="text-green-600">Avg Sentiment</div>
+          </div>
+          <div className="bg-purple-50 p-3 rounded">
+            <div className="text-purple-800 font-medium">{formatDate(data.summary.mostPositiveDay.date)}</div>
+            <div className="text-purple-600">Most Positive Day</div>
+          </div>
+          <div className="bg-red-50 p-3 rounded">
+            <div className="text-red-800 font-medium">{formatDate(data.summary.mostNegativeDay.date)}</div>
+            <div className="text-red-600">Most Negative Day</div>
+          </div>
+        </div>
+        <div className="flex items-center justify-center h-64 text-gray-500">
+          <div className="text-center">
+            <div className="text-lg mb-2">No per-sender timeline</div>
+            <div className="text-sm">Regenerate metrics to include daily sender data, or try another sender.</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Prepare chart data with formatted dates
   const chartData = currentData.map(point => ({
