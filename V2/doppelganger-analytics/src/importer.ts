@@ -12,6 +12,7 @@ import { isDevMode, applyDevModeLimit } from './utils/devMode.js';
 import { detectPlatform, supportedPlatforms } from './importers/registry.js';
 import type { NormalizedMessage } from './importers/types.js';
 import { namespacedConversationId } from './utils/platformSource.js';
+import { recordImportComplete } from './pipeline/freshness.js';
 import chalk from 'chalk';
 
 // Re-exported for backwards compatibility; the raw Instagram shape now lives
@@ -234,6 +235,9 @@ export async function importArchive(sourcePath: string): Promise<void> {
       )
     );
     console.log(chalk.blue(`📊 Conversations: ${conversationIds.slice(0, 8).join(', ')}${conversationIds.length > 8 ? '…' : ''}`));
+
+    recordImportComplete(db, sourcesInBatch);
+    console.log(chalk.gray('📌 Recorded import timestamp (run generate to refresh analytics).'));
 
   } finally {
     await closeDb(db);

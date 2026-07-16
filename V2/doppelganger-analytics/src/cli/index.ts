@@ -12,7 +12,7 @@ import { exportPersonaFineTune } from '../processors/personaFineTuneExport.js';
 import { resolveDataPaths, describeDataExpectations } from '../utils/resolveDataPath.js';
 
 
-async function runImport(zipPath: string) {
+async function runImport(zipPath: string, options?: { generate?: boolean }) {
   const spinner = ora(`Importing from ${zipPath}`).start();
   try {
     await importArchive(zipPath);
@@ -20,6 +20,19 @@ async function runImport(zipPath: string) {
   } catch (err) {
     spinner.fail(chalk.red('Import failed: ') + (err instanceof Error ? err.message : String(err)));
     throw err;
+  }
+
+  // Default: refresh analytics after every dump so persona profiles stay current.
+  const shouldGenerate = options?.generate !== false;
+  if (shouldGenerate) {
+    console.log(chalk.blue('↻ Regenerating analytics after import…'));
+    await runGenerate();
+  } else {
+    console.log(
+      chalk.yellow(
+        'Skipped generate (`--no-generate`). Persona profiles may be stale until you run `npm run generate-metrics`.'
+      )
+    );
   }
 }
 
@@ -191,7 +204,8 @@ async function runStart(explicitData: string | string[] | undefined) {
   }
   for (const dataPath of dataPaths) {
     console.log(chalk.blue(`📂 Using export: ${dataPath}`));
-    await runImport(dataPath);
+    // Import only — generate once after all dumps land.
+    await runImport(dataPath, { generate: false });
   }
   if (dataPaths.length > 1) {
     console.log(chalk.green(`✅ Imported ${dataPaths.length} exports (platforms merged in one database)`));
@@ -213,9 +227,19 @@ async function main() {
     .command('start', 'Auto-detect export → import → generate → dashboard', () => {}, async args => {
       await runStart(args.data as string | undefined);
     })
-    .command('import <zip>', 'Import messaging archive', y => y, async args => {
-      await runImport(args.zip as string);
-    })
+    .command(
+      'import <zip>',
+      'Import messaging archive (regenerates analytics by default)',
+      (y) =>
+        y.option('generate', {
+          type: 'boolean',
+          default: true,
+          describe: 'Run generate-metrics after a successful import (use --no-generate to skip)',
+        }),
+      async (args) => {
+        await runImport(args.zip as string, { generate: args.generate !== false });
+      }
+    )
     .command('generate', 'Generate analytics data (fast mode)', () => {}, async () => {
       await runGenerate();
     })

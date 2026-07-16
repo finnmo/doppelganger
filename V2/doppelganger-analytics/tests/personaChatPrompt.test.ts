@@ -250,4 +250,29 @@ describe('buildAnthropicPersonaRequest', () => {
     expect(system).toContain('Never pad');
     expect(system).toContain('friday brunch');
   });
+
+  test('injects platform voice from conversation id namespace', () => {
+    const { system } = buildAnthropicPersonaRequest(
+      mockProfile({
+        platformVoices: [
+          {
+            source: 'whatsapp',
+            messageCount: 200,
+            conversationCount: 3,
+            avgWordsPerMessage: 12,
+            avgEmojiPerMessage: 0.1,
+            lengthLabel: 'medium',
+            dmShare: 0.8,
+            styleSummary:
+              'On WhatsApp, Alex tends to send medium texts (~12 words/message) and uses emoji sparingly.',
+          },
+        ],
+      }),
+      [{ role: 'user', content: 'hey' }],
+      { conversationId: 'whatsapp:finn-tia' }
+    );
+
+    expect(system).toContain('Platform voice (WhatsApp');
+    expect(system).toContain('On WhatsApp, Alex tends to send medium texts');
+  });
 });

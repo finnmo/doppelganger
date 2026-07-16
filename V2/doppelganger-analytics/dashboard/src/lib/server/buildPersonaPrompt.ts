@@ -1,6 +1,7 @@
 import type { PersonaFewShotExample, PersonaProfile } from './personaProfiles';
 import type { MemorySnippet } from './personaRetrieval';
 import { tokenizeForRetrieval } from './personaRetrieval';
+import { parseConversationId, sourceLabel } from '../platforms';
 
 export interface ChatTurn {
   role: 'user' | 'assistant';
@@ -259,6 +260,27 @@ export function buildAnthropicPersonaRequest(
       '',
       'Voice for this specific chat (override global averages when they conflict):',
       activeVoice.styleSummary
+    );
+  }
+
+  const platformSource =
+    activeVoice?.source ??
+    (options?.conversationId ? parseConversationId(options.conversationId).source : null);
+  const platformVoice = platformSource
+    ? profile.platformVoices?.find((v) => v.source === platformSource)
+    : undefined;
+  if (platformVoice?.styleSummary) {
+    systemParts.push(
+      '',
+      `Platform voice (${sourceLabel(platformSource)} — use when no more specific chat voice applies, or to color this app’s register):`,
+      platformVoice.styleSummary
+    );
+  } else if (!activeVoice && (profile.platformVoices?.length ?? 0) > 1) {
+    // Unscoped chat: remind that platforms differ
+    systemParts.push(
+      '',
+      'Platform voices (this chat is not scoped — prefer the platform matching the few-shots you lean on):',
+      ...profile.platformVoices!.slice(0, 4).map((v) => `- ${v.styleSummary}`)
     );
   }
 

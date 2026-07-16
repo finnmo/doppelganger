@@ -5,7 +5,9 @@ import os from 'os';
 import path from 'path';
 import {
   buildConversationVoices,
+  buildPlatformVoices,
   findConversationVoice,
+  findPlatformVoice,
 } from '../src/processors/conversationVoice.js';
 
 describe('conversationVoice', () => {
@@ -78,5 +80,40 @@ describe('conversationVoice', () => {
     expect(dm?.styleSummary).toMatch(/1:1 DM/i);
     expect(group?.styleSummary).toMatch(/group/i);
     expect(group!.avgWordsPerMessage).toBeGreaterThan(dm!.avgWordsPerMessage);
+  });
+
+  test('builds per-platform voice cards', () => {
+    const insertMsg = db.prepare(
+      `INSERT INTO messages (conversation_id, sender, content, timestamp_ms, source)
+       VALUES (?, ?, ?, ?, ?)`
+    );
+    const insertTm = db.prepare(
+      `INSERT INTO text_metrics (message_id, word_count, emoji_count) VALUES (?, ?, ?)`
+    );
+
+    for (let i = 0; i < 50; i++) {
+      const a = insertMsg.run('instagram:dm', 'Alex', 'lol ok', i, 'instagram');
+      insertTm.run(Number(a.lastInsertRowid), 2, 0);
+      insertMsg.run('instagram:dm', 'Sam', 'hi', i, 'instagram');
+    }
+    for (let i = 0; i < 50; i++) {
+      const a = insertMsg.run(
+        'whatsapp:dm',
+        'Alex',
+        'hey how are you doing today hope you are well',
+        1000 + i,
+        'whatsapp'
+      );
+      insertTm.run(Number(a.lastInsertRowid), 10, 0.2);
+      insertMsg.run('whatsapp:dm', 'Sam', 'good', 1000 + i, 'whatsapp');
+    }
+
+    const platforms = buildPlatformVoices(db, 'Alex');
+    expect(platforms.map((p) => p.source).sort()).toEqual(['instagram', 'whatsapp']);
+    const ig = findPlatformVoice(platforms, 'instagram');
+    const wa = findPlatformVoice(platforms, 'whatsapp');
+    expect(ig?.styleSummary).toMatch(/Instagram/i);
+    expect(wa?.styleSummary).toMatch(/WhatsApp/i);
+    expect(wa!.avgWordsPerMessage).toBeGreaterThan(ig!.avgWordsPerMessage);
   });
 });

@@ -13,10 +13,15 @@ This project analyzes messaging history and exports **persona profiles** ready f
 | `relationshipCard` | How they address you, recurring people/places, tone with you + **with-you register** (openers, question-back rate, teasing samples) |
 | `withYouFewShotExamples` | Few-shot pairs where they are replying to you specifically |
 | `conversationVoices` | Per-chat voice notes (DM vs group); injected when that chat is open |
+| `platformVoices` | Per-app voice notes (Instagram vs WhatsApp, …); injected from conversation namespace |
 | `sources` | Platforms they appear on (instagram, whatsapp, …) |
 | vocabulary / sentiment / responsiveness | Supporting stats |
 
-Prompt assembly: `src/persona/buildPrompt.ts` → `buildPersonaPrompt(profile, fewShot)`.
+Live prompt assembly: `dashboard/src/lib/server/buildPersonaPrompt.ts` → `buildAnthropicPersonaRequest`.
+
+## Import freshness
+
+`npm run import` regenerates analytics by default (`--no-generate` to skip). Import/generate timestamps live in the SQLite `meta` table; the dashboard shows a staleness banner when profiles lag the DB.
 
 ## Accuracy target: ~85%
 

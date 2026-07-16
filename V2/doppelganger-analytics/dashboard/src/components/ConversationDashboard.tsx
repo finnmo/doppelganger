@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 import { ArrowLeft, Users } from 'lucide-react';
 import { ThemeSelector } from '@/components/ThemeSelector';
 import { ApiKeySettingsButton } from '@/components/ApiKeySettings';
+import { PrivacySettingsButton } from '@/components/PrivacySettings';
+import { DataFreshnessBanner } from '@/components/DataFreshnessBanner';
 import { TabNavigation } from '@/components/TabNavigation';
 import { OverviewTab } from '@/components/tabs/OverviewTab';
 import { MessagesTab } from '@/components/tabs/MessagesTab';
@@ -104,11 +106,16 @@ export function ConversationDashboard({ conversationId, onBack }: ConversationDa
             </div>
 
             <div className="flex items-center space-x-2 shrink-0">
+              <PrivacySettingsButton />
               <ApiKeySettingsButton />
               <ThemeSelector />
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+        <DataFreshnessBanner />
       </div>
 
       <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />

@@ -5,6 +5,8 @@ import { useConversationFilter } from '@/contexts/ConversationContext';
 import { Users, MessageCircle, Clock, ArrowRight } from 'lucide-react';
 import { ThemeSelector } from '@/components/ThemeSelector';
 import { ApiKeySettingsButton } from '@/components/ApiKeySettings';
+import { PrivacySettingsButton } from '@/components/PrivacySettings';
+import { DataFreshnessBanner } from '@/components/DataFreshnessBanner';
 import { PlatformBadge } from '@/components/PlatformBadge';
 import { parseConversationId, platformStyles, sourceLabel } from '@/lib/platforms';
 
@@ -191,10 +193,13 @@ export function ConversationList({ onConversationSelect }: ConversationListProps
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <PrivacySettingsButton />
           <ApiKeySettingsButton />
           <ThemeSelector />
         </div>
       </div>
+
+      <DataFreshnessBanner />
 
       {showPlatformFilters && (
         <div className="mb-6 flex flex-wrap gap-2 items-center">

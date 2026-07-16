@@ -5,7 +5,7 @@ import { getDb, closeDb } from '../db/client.js';
 import { progressReporter } from '../utils/progressReporter.js';
 import { writeDashData } from '../utils/output.js';
 import { buildRelationshipCard, extractWithYouFewShot, inferSelfSender, type RelationshipCard } from './relationshipCard.js';
-import { buildConversationVoices, type ConversationVoice } from './conversationVoice.js';
+import { buildConversationVoices, buildPlatformVoices, type ConversationVoice, type PlatformVoice } from './conversationVoice.js';
 import { buildBubbleHabits, type BubbleHabits } from './bubbleHabits.js';
 import { buildTurnTakingHabits, type TurnTakingHabits } from './turnTakingHabits.js';
 import { buildSharedTimeline, type SharedTimeline } from './sharedTimeline.js';
@@ -102,6 +102,8 @@ export interface PersonaStyleProfile {
   relationshipCard?: RelationshipCard | null;
   /** Style notes scoped to specific chats (DM vs group). */
   conversationVoices?: ConversationVoice[];
+  /** Style notes scoped by messaging platform (Instagram vs WhatsApp, etc.). */
+  platformVoices?: PlatformVoice[];
   /** Double-text / multi-bubble habits. */
   bubbleHabits?: BubbleHabits | null;
   /** Question-back / expand-compress / latency habits. */
@@ -271,6 +273,7 @@ export async function computePersonaMetrics(): Promise<void> {
           : null;
 
       const conversationVoices = buildConversationVoices(db, sender.sender);
+      const platformVoices = buildPlatformVoices(db, sender.sender);
       const bubbleHabits = buildBubbleHabits(db, sender.sender);
       const turnTakingHabits = buildTurnTakingHabits(db, sender.sender);
       const sharedTimeline =
@@ -306,6 +309,7 @@ export async function computePersonaMetrics(): Promise<void> {
         sources,
         relationshipCard,
         conversationVoices,
+        platformVoices,
         bubbleHabits,
         turnTakingHabits,
         sharedTimeline,
@@ -318,7 +322,7 @@ export async function computePersonaMetrics(): Promise<void> {
       inferredSelf: selfSender,
       profiles,
       capabilityNote:
-        'Each profile includes styleSummary + fewShotExamples + withYouFewShotExamples + relationshipCard (with-you register) + conversationVoices. ' +
+        'Each profile includes styleSummary + fewShotExamples + withYouFewShotExamples + relationshipCard (with-you register) + conversationVoices + platformVoices. ' +
         'See docs/PERSONA_SIMULATION.md.',
       accuracyTarget: '85%',
       nextStep: 'Evaluate with held-out replies; optional fine-tune for Tier 4.'

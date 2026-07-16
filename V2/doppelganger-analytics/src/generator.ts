@@ -28,6 +28,7 @@ import { computeEmotionalPeaksMetrics } from './processors/emotionalPeaksMetrics
 import { computePersonaMetrics } from './processors/personaMetrics.js';
 import { computePersonaEmbeddings } from './processors/personaEmbeddings.js';
 import { computePersonaEval } from './processors/personaEval.js';
+import { recordGenerateComplete } from './pipeline/freshness.js';
 import chalk from 'chalk';
 
 interface PipelineStep {
@@ -103,6 +104,16 @@ export async function generateDashboards(): Promise<void> {
 
     const duration = (Date.now() - startTime) / 1000;
     console.log(chalk.green(`✅ All metrics computed successfully in ${duration.toFixed(1)} seconds!`));
+
+    try {
+      const db = await getDb();
+      recordGenerateComplete(db);
+    } catch (err) {
+      console.warn(
+        chalk.yellow('Warning: could not record generate timestamp:'),
+        err instanceof Error ? err.message : err
+      );
+    }
   } catch (error) {
     console.error(chalk.red('❌ Error generating dashboards:'), error);
     throw error;

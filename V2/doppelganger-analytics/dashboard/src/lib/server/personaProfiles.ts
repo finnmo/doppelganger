@@ -32,6 +32,17 @@ export interface ConversationVoice {
   styleSummary: string;
 }
 
+export interface PlatformVoice {
+  source: string;
+  messageCount: number;
+  conversationCount: number;
+  avgWordsPerMessage: number;
+  avgEmojiPerMessage: number;
+  lengthLabel: string;
+  dmShare: number;
+  styleSummary: string;
+}
+
 export interface PersonaFewShotExample {
   context: string;
   reply: string;
@@ -68,6 +79,7 @@ export interface PersonaProfile {
   sources: string[];
   relationshipCard?: RelationshipCard | null;
   conversationVoices?: ConversationVoice[];
+  platformVoices?: PlatformVoice[];
   bubbleHabits?: {
     avgBubblesPerTurn: number;
     medianBubblesWhenMulti?: number;
