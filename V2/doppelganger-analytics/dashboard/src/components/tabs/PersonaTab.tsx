@@ -288,15 +288,35 @@ export function PersonaTab() {
       )}
 
       {profiles.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-[520px]">
-          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden flex flex-col">
-            <div className="px-4 py-3 border-b border-gray-100">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-stretch">
+          {/* Mobile: compact persona picker */}
+          <div className="lg:hidden">
+            <label htmlFor="persona-select" className="mb-1.5 block text-sm font-medium text-gray-700">
+              Who to simulate
+            </label>
+            <select
+              id="persona-select"
+              value={sender}
+              onChange={(e) => handleSenderChange(e.target.value)}
+              className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm focus:border-violet-500 focus:ring-2 focus:ring-violet-500"
+            >
+              {profiles.map((p) => (
+                <option key={p.sender} value={p.sender}>
+                  {p.sender} ({p.messageCount.toLocaleString()} msgs)
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Desktop: persona list */}
+          <div className="hidden max-h-[min(70dvh,720px)] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white lg:flex">
+            <div className="shrink-0 border-b border-gray-100 px-4 py-3">
               <h3 className="text-sm font-semibold text-gray-900">Who to simulate</h3>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="mt-0.5 text-xs text-gray-500">
                 {profiles.length} persona{profiles.length === 1 ? '' : 's'} from your data
               </p>
             </div>
-            <div className="overflow-y-auto flex-1 max-h-[480px]">
+            <div className="min-h-0 flex-1 overflow-y-auto">
               {profiles.map((p) => {
                 const active = p.sender === sender;
                 return (
@@ -304,16 +324,16 @@ export function PersonaTab() {
                     key={p.sender}
                     type="button"
                     onClick={() => handleSenderChange(p.sender)}
-                    className={`w-full text-left px-4 py-3 border-b border-gray-50 transition-colors ${
+                    className={`w-full border-b border-gray-50 px-4 py-3 text-left transition-colors ${
                       active ? 'bg-violet-50' : 'hover:bg-gray-50'
                     }`}
                   >
-                    <div className="font-medium text-gray-900 truncate">{p.sender}</div>
-                    <div className="text-xs text-gray-500 mt-0.5 tabular-nums">
+                    <div className="truncate font-medium text-gray-900">{p.sender}</div>
+                    <div className="mt-0.5 text-xs tabular-nums text-gray-500">
                       {p.messageCount.toLocaleString()} msgs · {p.exampleCount} examples
                     </div>
                     {p.sources.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1.5">
+                      <div className="mt-1.5 flex flex-wrap gap-1">
                         {p.sources.slice(0, 3).map((s) => (
                           <PlatformBadge key={s} source={s} />
                         ))}
@@ -325,24 +345,24 @@ export function PersonaTab() {
             </div>
           </div>
 
-          <div className="lg:col-span-2 bg-white border border-gray-200 rounded-xl flex flex-col min-h-[520px]">
-            <div className="px-4 py-3 border-b border-gray-100 flex items-start justify-between gap-3">
+          <div className="flex h-[min(70dvh,720px)] min-h-[420px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white lg:col-span-2">
+            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-100 px-3 py-3 sm:px-4">
               <div className="min-w-0">
-                <div className="font-semibold text-gray-900 truncate">
+                <div className="truncate font-semibold text-gray-900">
                   {activeProfile ? `Chat as ${activeProfile.sender}` : 'Select a person'}
                 </div>
                 {activeProfile && (
-                  <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                  <p className="mt-1 line-clamp-2 text-xs text-gray-500">
                     {activeProfile.styleSummary}
                   </p>
                 )}
                 {openConversationId && !conversationId && activeProfile && (
-                  <p className="text-xs text-amber-700 mt-1.5">
+                  <p className="mt-1.5 text-xs text-amber-700">
                     This person isn&apos;t in the open chat — using their global style/memories only.
                   </p>
                 )}
                 {conversationId && activeProfile && (
-                  <p className="text-xs text-violet-700 mt-1.5">
+                  <p className="mt-1.5 text-xs text-violet-700">
                     Scoped to the open conversation for memory + voice.
                   </p>
                 )}
@@ -351,18 +371,18 @@ export function PersonaTab() {
                 type="button"
                 onClick={clearChat}
                 disabled={messages.length === 0 && !input}
-                className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800 disabled:opacity-40 shrink-0"
+                className="inline-flex shrink-0 items-center gap-1 text-xs text-gray-500 hover:text-gray-800 disabled:opacity-40"
                 title="Clear chat"
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                Clear
+                <Trash2 className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Clear</span>
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-slate-50/50">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50/50 px-3 py-4 sm:px-4">
               {messages.length === 0 && activeProfile && (
-                <div className="text-center py-12 text-sm text-gray-500 max-w-md mx-auto">
-                  <Bot className="w-8 h-8 mx-auto text-violet-400 mb-2" />
+                <div className="mx-auto max-w-md py-10 text-center text-sm text-gray-500">
+                  <Bot className="mx-auto mb-2 h-8 w-8 text-violet-400" />
                   <p>
                     Message as if you&apos;re texting <strong>{activeProfile.sender}</strong>.
                     Chat starts blank — replies use style examples plus retrieved memories.
@@ -376,35 +396,33 @@ export function PersonaTab() {
                   className={`flex gap-2 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   {m.role === 'assistant' && (
-                    <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 bg-violet-100 text-violet-700">
-                      <Bot className="w-4 h-4" />
+                    <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700">
+                      <Bot className="h-4 w-4" />
                     </div>
                   )}
                   <div
-                    className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap break-words ${
+                    className={`max-w-[min(85%,28rem)] whitespace-pre-wrap break-words rounded-2xl px-3.5 py-2 text-sm ${
                       m.role === 'user'
-                        ? 'bg-gray-900 text-white rounded-br-md'
-                        : 'bg-white border border-gray-200 text-gray-900 rounded-bl-md shadow-sm'
+                        ? 'rounded-br-md bg-gray-900 text-white'
+                        : 'rounded-bl-md border border-gray-200 bg-white text-gray-900 shadow-sm'
                     }`}
                   >
                     {m.content}
                   </div>
                   {m.role === 'user' && (
-                    <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 bg-gray-200 text-gray-600">
-                      <User className="w-4 h-4" />
+                    <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-200 text-gray-600">
+                      <User className="h-4 w-4" />
                     </div>
                   )}
                 </div>
               ))}
 
               {sending && (
-                <div className="flex gap-2 items-center text-sm text-gray-500">
-                  <div className="w-7 h-7 rounded-full bg-violet-100 text-violet-700 flex items-center justify-center">
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-violet-100 text-violet-700">
+                    <Loader2 className="h-4 w-4 animate-spin" />
                   </div>
-                  <span>
-                    {activeProfile?.sender ?? 'Persona'} is typing…
-                  </span>
+                  <span>{activeProfile?.sender ?? 'Persona'} is typing…</span>
                 </div>
               )}
 
@@ -412,14 +430,14 @@ export function PersonaTab() {
             </div>
 
             {chatError && (
-              <div className="mx-4 mb-2 flex gap-2 p-2.5 rounded-lg bg-red-50 text-red-800 border border-red-200 text-xs">
-                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <div className="mx-3 mb-2 flex gap-2 rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs text-red-800 sm:mx-4">
+                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 {chatError}
               </div>
             )}
 
-            <div className="p-3 border-t border-gray-100">
-              <div className="flex gap-2 items-end">
+            <div className="shrink-0 border-t border-gray-100 p-3">
+              <div className="flex items-end gap-2">
                 <textarea
                   ref={inputRef}
                   value={input}
@@ -434,24 +452,24 @@ export function PersonaTab() {
                         ? `Message ${activeProfile.sender}…`
                         : 'Select someone to chat with…'
                   }
-                  className="flex-1 resize-none px-3 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500 disabled:bg-gray-50 disabled:text-gray-400"
+                  className="flex-1 resize-none rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:ring-2 focus:ring-violet-500 disabled:bg-gray-50 disabled:text-gray-400"
                 />
                 <button
                   type="button"
                   onClick={() => void sendMessage()}
                   disabled={!input.trim() || !activeProfile || !anthropicConfigured || sending}
-                  className="inline-flex items-center justify-center w-11 h-11 rounded-xl bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-40 disabled:hover:bg-violet-600"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-40 disabled:hover:bg-violet-600"
                   aria-label="Send"
                 >
                   {sending ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    <Send className="w-4 h-4" />
+                    <Send className="h-4 w-4" />
                   )}
                 </button>
               </div>
-              <p className="text-[11px] text-gray-400 mt-1.5 px-1">
-                Enter to send · Shift+Enter for newline · Retrieves facts from your message DB
+              <p className="mt-1.5 px-1 text-[11px] text-gray-400">
+                Enter to send · Shift+Enter for newline
               </p>
             </div>
           </div>

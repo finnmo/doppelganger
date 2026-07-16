@@ -113,7 +113,9 @@ export function ActivityHeatmap() {
   const hours = Array.from({ length: 24 }, (_, i) => i);
 
   return (
-    <div className="overflow-x-auto">
+    <div>
+      <p className="mb-2 text-xs text-gray-500 sm:hidden">Swipe sideways to see all hours</p>
+      <div className="overflow-x-auto overscroll-x-contain">
       <div className="min-w-max">
         {/* Hour labels */}
         <div className="flex mb-2">
@@ -157,6 +159,7 @@ export function ActivityHeatmap() {
           </div>
           <span className="ml-2">More</span>
         </div>
+      </div>
       </div>
     </div>
   );

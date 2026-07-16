@@ -9,6 +9,7 @@ import { PrivacySettingsButton } from '@/components/PrivacySettings';
 import { DataFreshnessBanner } from '@/components/DataFreshnessBanner';
 import { PlatformBadge } from '@/components/PlatformBadge';
 import { parseConversationId, platformStyles, sourceLabel } from '@/lib/platforms';
+import { TOOLBAR_ROW } from '@/lib/layout';
 
 type Conversation = ReturnType<typeof useConversationFilter>['conversations'][number];
 
@@ -78,14 +79,14 @@ function ConversationCard({ conversation, onClick }: ConversationCardProps) {
             {getDisplayName(conversation)}
           </h3>
 
-          <div className="flex items-center space-x-4 text-sm text-gray-600">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600">
             <div className="flex items-center space-x-1">
-              <MessageCircle className="w-4 h-4" />
+              <MessageCircle className="w-4 h-4 shrink-0" />
               <span>{conversation.total_messages?.toLocaleString() || 0} messages</span>
             </div>
 
             <div className="flex items-center space-x-1">
-              <Clock className="w-4 h-4" />
+              <Clock className="w-4 h-4 shrink-0" />
               <span>{formatDuration(conversation.duration_ms || 0)}</span>
             </div>
           </div>
@@ -182,17 +183,17 @@ export function ConversationList({ onConversationSelect }: ConversationListProps
   }
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="mb-8 flex items-start justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Your Conversations</h1>
-          <p className="text-gray-600">
+    <div className="w-full">
+      <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="mb-2 text-2xl font-bold text-gray-900 sm:text-3xl">Your Conversations</h1>
+          <p className="text-sm text-gray-600 sm:text-base">
             {showPlatformFilters
               ? 'Conversations from multiple messaging platforms — filter by source or open one for analytics.'
               : 'Select a conversation to view detailed analytics and insights'}
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className={`${TOOLBAR_ROW} shrink-0`}>
           <PrivacySettingsButton />
           <ApiKeySettingsButton />
           <ThemeSelector />
@@ -267,8 +268,10 @@ export function ConversationList({ onConversationSelect }: ConversationListProps
       </div>
 
       <div
-        className={`mb-8 grid grid-cols-1 gap-4 ${
-          showPlatformFilters ? 'md:grid-cols-4' : 'md:grid-cols-3'
+        className={`mb-6 grid grid-cols-2 gap-3 sm:mb-8 sm:gap-4 ${
+          showPlatformFilters
+            ? 'md:grid-cols-4'
+            : 'md:grid-cols-3'
         }`}
       >
         <div className="bg-blue-50 rounded-lg p-4">
@@ -303,7 +306,7 @@ export function ConversationList({ onConversationSelect }: ConversationListProps
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         {filteredConversations.map((conversation) => (
           <ConversationCard
             key={conversation.conversation_id}

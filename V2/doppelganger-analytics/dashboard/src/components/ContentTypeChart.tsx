@@ -238,7 +238,7 @@ const ContentTypeChart: React.FC = () => {
   return (
     <div className="h-full flex flex-col">
       <div className="mb-3 flex-shrink-0">
-        <div className="grid grid-cols-3 gap-4 text-sm text-gray-600">
+        <div className="grid grid-cols-1 gap-3 text-sm text-gray-600 sm:grid-cols-3 sm:gap-4">
           <div>
             <span className="font-medium text-gray-900">{data.summary.totalMessages.toLocaleString()}</span>
             <br />Total Messages

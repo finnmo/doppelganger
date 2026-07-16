@@ -17,6 +17,7 @@ import { PersonaTab } from '@/components/tabs/PersonaTab';
 import { PlatformBadge } from '@/components/PlatformBadge';
 import { useConversationFilter } from '@/contexts/ConversationContext';
 import { parseConversationId } from '@/lib/platforms';
+import { PAGE_SHELL, TOOLBAR_ROW } from '@/lib/layout';
 
 interface ConversationDashboardProps {
   conversationId: string;
@@ -73,29 +74,30 @@ export function ConversationDashboard({ conversationId, onBack }: ConversationDa
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between py-4">
-            <div className="flex items-center space-x-4 min-w-0">
+        <div className={PAGE_SHELL}>
+          <div className="flex flex-col gap-3 py-3 sm:py-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-w-0 items-start gap-3 sm:items-center sm:gap-4">
               <button
                 type="button"
                 onClick={onBack}
-                className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 shrink-0"
+                className="inline-flex shrink-0 items-center rounded-md border border-gray-300 bg-white px-2.5 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:px-3"
               >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Conversations
+                <ArrowLeft className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Back to Conversations</span>
+                <span className="sm:hidden">Back</span>
               </button>
 
-              <div className="border-l border-gray-300 pl-4 min-w-0">
-                <div className="flex items-center space-x-2">
-                  <Users className="w-5 h-5 text-gray-500 shrink-0" />
+              <div className="min-w-0 border-l border-gray-200 pl-3 sm:pl-4">
+                <div className="flex min-w-0 items-start gap-2 sm:items-center">
+                  <Users className="mt-0.5 h-5 w-5 shrink-0 text-gray-500 sm:mt-0" />
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h1 className="text-xl font-bold text-gray-900 truncate">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h1 className="truncate text-lg font-bold text-gray-900 sm:text-xl">
                         {getConversationDisplayName()}
                       </h1>
                       {source && <PlatformBadge source={source} size="md" />}
                     </div>
-                    <p className="text-sm text-gray-600">
+                    <p className="text-xs text-gray-600 sm:text-sm">
                       {conversation
                         ? `${conversation.total_messages.toLocaleString()} messages · ${source ? conversation.source_label : 'Analytics'}`
                         : 'Analytics for this conversation'}
@@ -105,7 +107,7 @@ export function ConversationDashboard({ conversationId, onBack }: ConversationDa
               </div>
             </div>
 
-            <div className="flex items-center space-x-2 shrink-0">
+            <div className={`${TOOLBAR_ROW} shrink-0`}>
               <PrivacySettingsButton />
               <ApiKeySettingsButton />
               <ThemeSelector />
@@ -114,13 +116,13 @@ export function ConversationDashboard({ conversationId, onBack }: ConversationDa
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+      <div className={`${PAGE_SHELL} pt-3 sm:pt-4`}>
         <DataFreshnessBanner />
       </div>
 
       <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className={`${PAGE_SHELL} py-5 sm:py-8`}>
         {renderTabContent()}
       </div>
     </div>

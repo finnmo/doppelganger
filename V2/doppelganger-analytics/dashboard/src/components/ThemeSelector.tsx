@@ -56,18 +56,19 @@ export function ThemeSelector() {
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`
-          flex items-center space-x-2 px-4 py-2 text-sm font-medium text-gray-700 
+          inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 
           bg-white border border-gray-300 rounded-lg hover:bg-gray-50 
           focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
           transition-colors duration-200
         `}
         aria-expanded={isOpen}
         aria-haspopup="true"
+        title="Theme"
       >
-        <Palette className="w-4 h-4" />
-        <span>{selectedTheme?.name} Theme</span>
+        <Palette className="w-4 h-4 shrink-0" />
+        <span className="hidden sm:inline">{selectedTheme?.name} Theme</span>
         <ChevronDown 
-          className={`w-4 h-4 transition-transform duration-200 ${
+          className={`hidden w-4 h-4 transition-transform duration-200 sm:block ${
             isOpen ? 'transform rotate-180' : ''
           }`} 
         />
@@ -83,7 +84,7 @@ export function ThemeSelector() {
           />
           
           {/* Menu */}
-          <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-20">
+          <div className="absolute right-0 z-20 mt-2 w-[min(20rem,calc(100vw-1.5rem))] rounded-lg border border-gray-200 bg-white shadow-lg">
             <div className="p-4 border-b border-gray-200">
               <h3 className="text-sm font-semibold text-gray-900 flex items-center">
                 <Palette className="w-4 h-4 mr-2" />

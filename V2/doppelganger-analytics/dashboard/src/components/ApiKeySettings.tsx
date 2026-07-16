@@ -261,32 +261,32 @@ export function ApiKeySettings({ open, onClose }: ApiKeySettingsProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="api-key-settings-title"
-        className="relative w-full max-w-lg bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden"
+        className="relative z-10 flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl"
       >
-        <div className="flex items-start justify-between px-5 py-4 border-b border-gray-200">
+        <div className="flex shrink-0 items-start justify-between border-b border-gray-200 px-5 py-4">
           <div>
             <h2
               id="api-key-settings-title"
-              className="text-lg font-semibold text-gray-900 flex items-center gap-2"
+              className="flex items-center gap-2 text-lg font-semibold text-gray-900"
             >
-              <KeyRound className="w-5 h-5 text-gray-700" />
+              <KeyRound className="h-5 w-5 text-gray-700" />
               API settings
             </h2>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="mt-1 text-sm text-gray-500">
               Claude for chat; OpenAI/Voyage for vector memory. Keys stay on this computer.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+            className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
             aria-label="Close"
           >
-            <X className="w-5 h-5" />
+            <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="px-5 py-4 space-y-6 max-h-[80vh] overflow-y-auto">
+        <div className="space-y-6 overflow-y-auto px-5 py-4">
           <div className="flex gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-700">
             <Shield className="w-5 h-5 text-slate-600 shrink-0 mt-0.5" />
             <div className="space-y-1">

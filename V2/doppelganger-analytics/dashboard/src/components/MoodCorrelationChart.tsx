@@ -263,7 +263,7 @@ export default function MoodCorrelationChart() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 text-sm">
         <div className="bg-blue-50 p-3 rounded">
           <div className="text-blue-800 font-medium">{data.summary.totalParticipants}</div>
           <div className="text-blue-600">Participants</div>

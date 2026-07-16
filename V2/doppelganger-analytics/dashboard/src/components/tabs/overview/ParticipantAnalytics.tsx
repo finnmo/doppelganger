@@ -11,8 +11,8 @@ interface ParticipantAnalyticsProps {
   totalMessages: number;
 }
 
-function truncateName(name: string): string {
-  return name.length > 12 ? `${name.substring(0, 12)}...` : name;
+function truncateName(name: string, max = 22): string {
+  return name.length > max ? `${name.substring(0, max)}…` : name;
 }
 
 function formatResponseTime(ms: number): string {

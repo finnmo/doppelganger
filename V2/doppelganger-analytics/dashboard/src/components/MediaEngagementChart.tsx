@@ -206,7 +206,7 @@ export default function MediaEngagementChart() {
   }
 
   const renderSummaryStats = () => (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
       <div className="bg-blue-50 rounded-lg p-4">
         <div className="text-blue-600 text-sm font-medium">Media Messages</div>
         <div className="text-2xl font-bold text-blue-900">
@@ -352,7 +352,7 @@ export default function MediaEngagementChart() {
               {sender.sender}
             </h5>
             <div className="space-y-3">
-              <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center">
                 <div>
                   <p className="text-sm text-gray-600">Photos</p>
                   <p className="font-bold text-blue-600">{sender.photos}</p>

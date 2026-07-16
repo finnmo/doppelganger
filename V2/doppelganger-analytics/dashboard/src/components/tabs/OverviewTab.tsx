@@ -136,7 +136,7 @@ export function OverviewTab() {
       <div className="relative">
         <div className={`absolute inset-0 ${themeClasses.headerGradientClass}`}></div>
         <div className={`relative ${themeStyle === 'modern' ? 'p-8' : 'p-6'}`}>
-          <h2 className="text-3xl font-bold text-gray-900 flex items-center mb-1">
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 flex flex-wrap items-center gap-2 mb-1">
             <BarChart3 className="w-8 h-8 mr-3 text-blue-600" />
             Overview of Conversation
           </h2>

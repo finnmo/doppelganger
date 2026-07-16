@@ -27,7 +27,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${inter.variable} ${jetbrainsMono.variable} antialiased bg-gray-50 min-h-screen font-sans`}
+        className={`${inter.variable} ${jetbrainsMono.variable} antialiased bg-gray-50 min-h-screen font-sans overflow-x-hidden`}
       >
         <ThemeProvider>
           <ConversationProvider>

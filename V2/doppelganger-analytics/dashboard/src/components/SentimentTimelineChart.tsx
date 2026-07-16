@@ -205,7 +205,7 @@ const SentimentTimelineChart: React.FC = () => {
           <div className="space-y-1 text-sm">
             <p><strong>Sentiment Score:</strong> {data.avgCompound.toFixed(3)}</p>
             <p><strong>Messages:</strong> {data.messageCount.toLocaleString()}</p>
-            <div className="grid grid-cols-3 gap-2 mt-2 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2 text-xs">
               <div className="text-green-600">
                 <span className="font-medium">Positive:</span> {(data.avgPositive * 100).toFixed(1)}%
               </div>
@@ -261,7 +261,7 @@ const SentimentTimelineChart: React.FC = () => {
   return (
     <div className="space-y-6">
         {/* Summary Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 text-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 text-sm">
           <div className="bg-blue-50 p-3 rounded">
             <div className="text-blue-800 font-medium">{data.summary.totalDays}</div>
             <div className="text-blue-600">Days Analyzed</div>

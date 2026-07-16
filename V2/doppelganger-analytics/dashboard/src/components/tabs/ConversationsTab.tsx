@@ -68,27 +68,27 @@ export function ConversationsTab() {
   }, [selectedConversations, isFiltered]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       {/* Header */}
       <div className="relative">
         <div className="absolute inset-0 bg-gradient-to-r from-green-50 via-teal-50 to-blue-50 rounded-2xl opacity-40"></div>
-        <div className="relative p-6">
-          <h2 className="text-3xl font-bold text-gray-900 flex items-center mb-1">
-            <Users className="w-8 h-8 mr-3 text-green-600" />
+        <div className="relative p-4 sm:p-6">
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 flex flex-wrap items-center gap-2 mb-1">
+            <Users className="w-7 h-7 sm:w-8 sm:h-8 text-green-600 shrink-0" />
             Conversations & Thread Analysis
           </h2>
-          <p className="text-lg text-gray-600">
+          <p className="text-base sm:text-lg text-gray-600">
             Conversation structure, thread depth analysis, and participant engagement patterns
           </p>
         </div>
       </div>
 
       {/* Conversation Overview */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
         {/* Conversation Metrics Overview */}
-        <div className="bg-white p-6 rounded-lg shadow-sm border">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-            <MessageSquare className="w-5 h-5 mr-2 text-blue-500" />
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm border min-w-0">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex flex-wrap items-center gap-2">
+            <MessageSquare className="w-5 h-5 text-blue-500 shrink-0" />
             Conversation Metrics Overview
           </h3>
           <p className="text-sm text-gray-600 mb-4">

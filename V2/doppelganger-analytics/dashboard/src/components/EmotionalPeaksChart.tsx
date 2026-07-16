@@ -602,7 +602,7 @@ export function EmotionalPeaksChart() {
   const renderRecoveryView = () => (
     <div className="space-y-6">
       {/* Recovery statistics */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div className="bg-green-50 p-4 rounded-lg">
           <div className="text-green-600 font-semibold text-sm">Peak Recovery</div>
           <div className="text-2xl font-bold text-green-900">
@@ -696,7 +696,7 @@ export function EmotionalPeaksChart() {
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
         <div className="bg-green-50 p-3 rounded-lg">
           <div className="text-green-600 font-semibold text-sm">Emotional Peaks</div>
           <div className="text-xl font-bold text-green-900">{data.summary.total_peaks}</div>

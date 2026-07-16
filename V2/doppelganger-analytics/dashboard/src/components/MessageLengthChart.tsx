@@ -141,7 +141,7 @@ export function MessageLengthChart() {
   return (
     <div className="h-80">
       {/* Stats Header */}
-      <div className="mb-3 grid grid-cols-3 gap-4 text-center">
+      <div className="mb-3 grid grid-cols-1 gap-3 text-center sm:grid-cols-3 sm:gap-4">
         <div className="bg-gray-50 p-2 rounded">
           <div className="text-lg font-bold text-blue-600">{averageLength.toFixed(1)}</div>
           <div className="text-xs text-gray-500">Avg Words/Message</div>

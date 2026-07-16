@@ -268,7 +268,7 @@ export function EngagementScoring() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
         <div className="bg-blue-50 p-4 rounded-lg">
           <div className="flex items-center space-x-2">
             <Users className="w-4 h-4 text-blue-600" />

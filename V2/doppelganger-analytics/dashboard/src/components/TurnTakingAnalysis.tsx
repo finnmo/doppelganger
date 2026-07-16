@@ -254,7 +254,7 @@ export function TurnTakingAnalysis() {
   return (
     <div className="space-y-6">
       {/* Summary Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div className="bg-blue-50 rounded-lg p-3">
           <div className="flex items-center">
             <MessageSquare className="w-4 h-4 text-blue-600 mr-2" />

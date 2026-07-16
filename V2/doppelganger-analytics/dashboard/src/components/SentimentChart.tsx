@@ -167,7 +167,7 @@ export function SentimentChart() {
     <div className="space-y-4">
       {/* Summary Statistics */}
       {data.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4">
           <div className="bg-blue-50 p-3 rounded-lg">
             <div className="text-blue-800 font-medium">{data.length}</div>
             <div className="text-blue-600 text-sm">Participants</div>
