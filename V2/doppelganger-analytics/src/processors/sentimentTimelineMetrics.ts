@@ -284,6 +284,52 @@ export async function computeSentimentTimelineMetrics(): Promise<void> {
     }
     writeDashData('sentimentDailyByConversation.json', dailyByConversation);
 
+    // Per-sender daily rows for filtered "by sender" timeline rebuild.
+    const dailyBySender: Array<{
+      sender: string;
+      conversation_id: string;
+      date: string;
+      compoundSum: number;
+      positiveSum: number;
+      negativeSum: number;
+      neutralSum: number;
+      messageCount: number;
+    }> = [];
+    for (const [sender, days] of senderDateGroups.entries()) {
+      for (const [date, group] of days.entries()) {
+        // Re-aggregate from raw records for conversation_id linkage
+        const recordsForDay = sentimentData.filter(
+          r => r.sender === sender && r.date === date
+        );
+        const byConv = new Map<string, typeof group>();
+        for (const r of recordsForDay) {
+          let g = byConv.get(r.conversation_id);
+          if (!g) {
+            g = { sentiments: [], positives: [], negatives: [], neutrals: [], count: 0 };
+            byConv.set(r.conversation_id, g);
+          }
+          g.sentiments.push(r.compound);
+          g.positives.push(r.positive);
+          g.negatives.push(r.negative);
+          g.neutrals.push(r.neutral);
+          g.count++;
+        }
+        for (const [conversationId, g] of byConv.entries()) {
+          dailyBySender.push({
+            sender,
+            conversation_id: conversationId,
+            date,
+            compoundSum: Math.round(g.sentiments.reduce((a, b) => a + b, 0) * 1000) / 1000,
+            positiveSum: Math.round(g.positives.reduce((a, b) => a + b, 0) * 1000) / 1000,
+            negativeSum: Math.round(g.negatives.reduce((a, b) => a + b, 0) * 1000) / 1000,
+            neutralSum: Math.round(g.neutrals.reduce((a, b) => a + b, 0) * 1000) / 1000,
+            messageCount: g.count
+          });
+        }
+      }
+    }
+    writeDashData('sentimentDailyBySender.json', dailyBySender);
+
     progressReporter.success('Sentiment timeline metrics computed and exported.');
     progressReporter.update(`Timeline spans ${summary.totalDays} days`);
     progressReporter.update(`Average daily sentiment: ${summary.avgDailySentiment.toFixed(3)}`);

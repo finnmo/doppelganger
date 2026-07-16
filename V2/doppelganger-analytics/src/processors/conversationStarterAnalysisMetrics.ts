@@ -5,7 +5,8 @@ import { writeDashData } from '../utils/output.js';
 // A "starter" is the first message of a conversation, or the first message
 // after a quiet gap of at least SESSION_GAP_MS. That makes the metric useful
 // both globally and when a single long DM thread is selected.
-const SESSION_GAP_MS = 24 * 60 * 60 * 1000;
+// 4h gap: overnight pauses count as new sessions; 24h undercounted restarts badly.
+const SESSION_GAP_MS = 4 * 60 * 60 * 1000;
 const RESPONSE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 interface MessageRow {

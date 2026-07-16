@@ -52,27 +52,38 @@ Keep each export handy for the next step. You can import several platforms over 
 1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) and open it. Wait until it says Docker is running (the whale icon is idle, not “starting”).
 2. Get this project onto your computer (clone or download the folder). You should see a file named `docker-compose.yml` inside it.
 3. In that same project folder, create a folder named `data` (if it is not already there).
-4. Put your export ZIP(s) **inside** the `data` folder (Instagram, Messenger, WhatsApp — any mix).
-5. Open Terminal (Mac) or PowerShell (Windows), go into the project folder, then run:
+4. Put all export ZIP(s) at the top level of `data` (Instagram, Messenger, WhatsApp — any mix).
+5. Put extracted export folders as siblings in the same `data` folder (for example `data/imessage/` for imessage-exporter TXT output).
+   - Example layout:
+
+```text
+data/
+  instagram-export.zip
+  facebook-export.zip
+  imessage/
+```
+6. Open Terminal (Mac) or PowerShell (Windows), go into the project folder, then run:
 
 ```bash
-docker compose up --build
+FORCE_REIMPORT=1 docker compose up --build
 ```
 
 The first run can take several minutes while Docker downloads and builds. Leave the window open.
-6. When the log says the dashboard is ready, open a browser to **http://localhost:3000**.
+7. When the log says the dashboard is ready, open a browser to **http://localhost:3000**.
 
 To stop: press `Ctrl+C` in that terminal window, or quit Docker Desktop.
 
 **Privacy:** Import, analysis, and the dashboard all run locally in Docker on your computer. Use the dashboard **Privacy** button to export analytics or wipe local data.
 
-**Updating with a new export:** Replace or add ZIPs in `data`, then run:
+**Updating with a new export:** Replace/add ZIPs and extracted folders in `data`, then run:
 
 ```bash
 FORCE_REIMPORT=1 docker compose up
 ```
 
 (On Windows PowerShell: `$env:FORCE_REIMPORT=1; docker compose up`)
+
+Note: `instagram-export.zip` in this repo is a tiny e2e fixture. For full Instagram import results, use your real Meta JSON export (Download Your Information with Messages selected).
 
 #### If something goes wrong (Docker)
 

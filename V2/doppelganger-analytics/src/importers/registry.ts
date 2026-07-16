@@ -3,11 +3,13 @@
 
 import type { PlatformImporter } from './types.js';
 import { imessageImporter } from './imessage.js';
+import { imessageExporterImporter } from './imessageExporter.js';
 import { whatsappImporter } from './whatsapp.js';
 import { metaJsonImporter } from './metaJson.js';
 
 export const IMPORTERS: PlatformImporter[] = [
   imessageImporter,
+  imessageExporterImporter,
   whatsappImporter,
   metaJsonImporter
 ];

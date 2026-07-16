@@ -11,6 +11,7 @@ import fs from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
 import { createRequire } from 'module';
+import unzipper from 'unzipper';
 
 const EXPORT_DIR = process.env.EXPORT_DIR || '/export';
 const FORCE_REIMPORT =
@@ -37,16 +38,78 @@ function findExports(dir) {
     .map((e) => path.join(dir, e.name))
     .sort();
 
-  if (zips.length > 0) return zips;
+  // If there are ZIP exports, keep them but also look for other extracted export
+  // folders (like iMessage TXT exports) alongside them.
+  const exportPaths = [...zips];
 
-  const hasMessages = entries.some(
-    (e) =>
-      (e.isDirectory() &&
-        (e.name === 'messages' || e.name === 'inbox' || e.name === 'your_instagram_activity')) ||
-      (e.isFile() && e.name.startsWith('message_') && e.name.endsWith('.json')) ||
-      (e.isFile() && (e.name === '_chat.txt' || e.name === 'chat.db'))
+  const iMessageTimestampLineRe = new RegExp(
+    '^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\s+\\d{1,2},\\s+\\d{4}\\s+\\d{1,2}:\\d{2}:\\d{2}\\s+(?:AM|PM)'
   );
-  if (hasMessages) return [dir];
+
+  function dirLooksLikeIMessageExporterTxt(dirPath) {
+    let dirEntries;
+    try {
+      dirEntries = fs.readdirSync(dirPath, { withFileTypes: true });
+    } catch {
+      return false;
+    }
+
+    const txtFiles = dirEntries
+      .filter((e) => e.isFile() && e.name.toLowerCase().endsWith('.txt'))
+      .slice(0, 8);
+    if (txtFiles.length === 0) return false;
+
+    // Sample a few files and look for timestamp lines.
+    let hits = 0;
+    for (const f of txtFiles) {
+      try {
+        const full = path.join(dirPath, f.name);
+        const sample = fs.readFileSync(full, 'utf8').slice(0, 8000);
+        const lines = sample.split(/\r?\n/);
+        for (const line of lines.slice(0, 60)) {
+          if (iMessageTimestampLineRe.test(line.trim())) {
+            hits++;
+            if (hits >= 2) return true;
+          }
+        }
+      } catch {
+        // ignore unreadable files
+      }
+    }
+    return false;
+  }
+
+  function dirLooksLikeMessages(dirPath, dirEntries) {
+    if (!dirEntries) return false;
+    const localHasMessages = dirEntries.some(
+      (e) =>
+        (e.isDirectory() &&
+          (e.name === 'messages' || e.name === 'inbox' || e.name === 'your_instagram_activity')) ||
+        (e.isFile() && e.name.startsWith('message_') && e.name.endsWith('.json')) ||
+        (e.isFile() && (e.name === '_chat.txt' || e.name === 'chat.db'))
+    );
+    return localHasMessages || dirLooksLikeIMessageExporterTxt(dirPath);
+  }
+
+  const rootHasMessages = dirLooksLikeMessages(dir, entries);
+  if (rootHasMessages) exportPaths.push(dir);
+
+  // Also check extracted export folders directly under /export (common when
+  // you mount a `data/` folder containing both ZIPs and extracted txt folders).
+  for (const e of entries) {
+    if (!e.isDirectory() || e.name.startsWith('.')) continue;
+    const subPath = path.join(dir, e.name);
+    const subEntries = (() => {
+      try {
+        return fs.readdirSync(subPath, { withFileTypes: true });
+      } catch {
+        return null;
+      }
+    })();
+    if (dirLooksLikeMessages(subPath, subEntries)) exportPaths.push(subPath);
+  }
+
+  if (exportPaths.length > 0) return Array.from(new Set(exportPaths)).sort();
 
   // Nested single folder (common after unzip)
   const dirs = entries.filter((e) => e.isDirectory() && !e.name.startsWith('.'));
@@ -82,6 +145,92 @@ function run(cmd, args, opts = {}) {
   });
 }
 
+async function detectExportPlatform(exportPath) {
+  const lowerPath = exportPath.toLowerCase();
+  const iMessageTimestampLineRe = new RegExp(
+    '^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\\s+\\d{1,2},\\s+\\d{4}\\s+\\d{1,2}:\\d{2}:\\d{2}\\s+(?:AM|PM)'
+  );
+  const hasMetaMarkers = (entries) =>
+    entries.some(
+      (entry) =>
+        entry.includes('/messages/inbox/') ||
+        entry.includes('/your_instagram_activity/') ||
+        entry.includes('/your_facebook_activity/') ||
+        /\/message_\d+\.json$/.test(entry)
+    );
+
+  if (lowerPath.endsWith('.zip')) {
+    try {
+      const zip = await unzipper.Open.file(exportPath);
+      const entries = zip.files.map((f) => f.path.toLowerCase());
+      if (entries.some((entry) => entry.endsWith('/chat.db') || entry === 'chat.db')) {
+        return 'iMessage (chat.db ZIP)';
+      }
+      if (entries.some((entry) => entry.endsWith('/_chat.txt') || entry === '_chat.txt')) {
+        return 'WhatsApp (_chat.txt ZIP)';
+      }
+      if (hasMetaMarkers(entries)) return 'Instagram / Messenger (Meta JSON ZIP)';
+      return 'Unknown ZIP format';
+    } catch {
+      return 'Unknown ZIP format (unreadable ZIP)';
+    }
+  }
+
+  try {
+    const entries = fs.readdirSync(exportPath, { withFileTypes: true });
+    if (entries.some((e) => e.isFile() && e.name === 'chat.db')) return 'iMessage (chat.db folder)';
+    if (entries.some((e) => e.isFile() && e.name === '_chat.txt')) return 'WhatsApp (_chat.txt folder)';
+
+    const txtFiles = entries.filter((e) => e.isFile() && e.name.toLowerCase().endsWith('.txt')).slice(0, 6);
+    let iMessageTxtHits = 0;
+    for (const txt of txtFiles) {
+      try {
+        const sample = fs.readFileSync(path.join(exportPath, txt.name), 'utf8').slice(0, 8000);
+        const lines = sample.split(/\r?\n/);
+        if (lines.some((line) => iMessageTimestampLineRe.test(line.trim()))) {
+          iMessageTxtHits++;
+          if (iMessageTxtHits >= 2) return 'iMessage (imessage-exporter TXT)';
+        }
+      } catch {
+        // ignore unreadable files
+      }
+    }
+
+    const walk = (dirPath, depth = 0) => {
+      if (depth > 5) return false;
+      let subEntries;
+      try {
+        subEntries = fs.readdirSync(dirPath, { withFileTypes: true });
+      } catch {
+        return false;
+      }
+      for (const sub of subEntries) {
+        const subPath = path.join(dirPath, sub.name);
+        if (sub.isDirectory()) {
+          const lowered = subPath.toLowerCase();
+          if (
+            lowered.includes('/messages/inbox') ||
+            lowered.includes('/your_instagram_activity') ||
+            lowered.includes('/your_facebook_activity')
+          ) {
+            return true;
+          }
+          if (walk(subPath, depth + 1)) return true;
+        } else if (sub.isFile() && /^message_\d+\.json$/i.test(sub.name)) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    if (walk(exportPath)) return 'Instagram / Messenger (Meta JSON folder)';
+  } catch {
+    return 'Unknown folder format (unreadable)';
+  }
+
+  return 'Unknown folder format';
+}
+
 function syncDashData() {
   const dashData = path.resolve('dash-data');
   const publicData = path.resolve('dashboard/public/data');
@@ -104,8 +253,10 @@ function syncDashData() {
 }
 
 async function importAndGenerate(exportPaths) {
-  for (const exportPath of exportPaths) {
-    log(`Importing from ${exportPath}…`);
+  for (const [idx, exportPath] of exportPaths.entries()) {
+    const detectedPlatform = await detectExportPlatform(exportPath);
+    log(`[${idx + 1}/${exportPaths.length}] Importing from ${exportPath}`);
+    log(`    Detected: ${detectedPlatform}`);
     // Skip auto-generate per ZIP — one generate after all platforms land.
     await run('node', ['dist/src/cli/index.js', 'import', '--no-generate', exportPath]);
   }

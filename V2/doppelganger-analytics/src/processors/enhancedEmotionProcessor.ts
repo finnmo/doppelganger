@@ -15,6 +15,7 @@ interface MessageRow {
 interface EmotionData {
   message_id: number;
   conversation_id: string;
+  sender: string;
   emotions: {
     joy: number;
     sadness: number;
@@ -129,6 +130,7 @@ export async function generateEnhancedEmotions(): Promise<void> {
         emotionResults.push({
           message_id: message.id,
           conversation_id: message.conversation_id,
+          sender: message.sender,
           emotions
         });
       }

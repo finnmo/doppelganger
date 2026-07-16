@@ -1,7 +1,9 @@
 import {
   buildTimelineFromDailyRows,
+  buildSenderTimelineFromDailyRows,
   summarizeTimeline,
-  type SentimentDailyRow
+  type SentimentDailyRow,
+  type SentimentDailyBySenderRow
 } from '../dashboard/src/lib/sentimentTimeline';
 
 const rows: SentimentDailyRow[] = [
@@ -57,5 +59,25 @@ describe('summarizeTimeline', () => {
     expect(summary.totalDays).toBe(0);
     expect(summary.mostPositiveDay).toBeNull();
     expect(summary.dateRange).toEqual({ start: 'N/A', end: 'N/A' });
+  });
+});
+
+describe('buildSenderTimelineFromDailyRows', () => {
+  const senderRows: SentimentDailyBySenderRow[] = [
+    { sender: 'Alice', conversation_id: 'c1', date: '2024-01-01', compoundSum: 0.6, positiveSum: 0.3, negativeSum: 0.1, neutralSum: 0.5, messageCount: 2 },
+    { sender: 'Alice', conversation_id: 'c1', date: '2024-01-02', compoundSum: -0.4, positiveSum: 0.1, negativeSum: 0.3, neutralSum: 0.2, messageCount: 1 },
+    { sender: 'Bob', conversation_id: 'c1', date: '2024-01-01', compoundSum: 0.2, positiveSum: 0.1, negativeSum: 0.0, neutralSum: 0.3, messageCount: 1 }
+  ];
+
+  test('builds per-sender daily timeline for selected conversations', () => {
+    const alice = buildSenderTimelineFromDailyRows(senderRows, ['c1'], 'Alice');
+    expect(alice).toHaveLength(2);
+    expect(alice[0].avgCompound).toBe(0.3);
+  });
+
+  test('excludes other senders', () => {
+    const bob = buildSenderTimelineFromDailyRows(senderRows, ['c1'], 'Bob');
+    expect(bob).toHaveLength(1);
+    expect(bob[0].avgCompound).toBe(0.2);
   });
 });
