@@ -5,6 +5,7 @@
 
 import type { Database as DatabaseType } from 'better-sqlite3';
 import { sourceLabel } from '../utils/platformSource.js';
+import { conversationParticipantCounts } from './conversationParticipants.js';
 
 const MIN_MESSAGES = 25;
 const MAX_VOICES_PER_SENDER = 20;
@@ -63,6 +64,8 @@ export function buildConversationVoices(
   db: DatabaseType,
   sender: string
 ): ConversationVoice[] {
+  const participantCounts = conversationParticipantCounts(db);
+
   const rows = db
     .prepare(
       `
@@ -71,13 +74,7 @@ export function buildConversationVoices(
       MAX(m.source) AS source,
       COUNT(*) AS messageCount,
       AVG(COALESCE(tm.word_count, 0)) AS avgWords,
-      AVG(COALESCE(tm.emoji_count, 0)) AS avgEmoji,
-      (
-        SELECT COUNT(DISTINCT m2.sender)
-        FROM messages m2
-        WHERE m2.conversation_id = m.conversation_id
-          AND m2.is_system = 0
-      ) AS participantCount
+      AVG(COALESCE(tm.emoji_count, 0)) AS avgEmoji
     FROM messages m
     LEFT JOIN text_metrics tm ON tm.message_id = m.id
     WHERE m.sender = ?
@@ -96,10 +93,13 @@ export function buildConversationVoices(
     messageCount: number;
     avgWords: number;
     avgEmoji: number;
-    participantCount: number;
   }>;
 
-  return rows.map((row) => {
+  return rows.map((raw) => {
+    const row = {
+      ...raw,
+      participantCount: participantCounts.get(raw.conversationId) ?? 0,
+    };
     const avgWords = Math.round((row.avgWords ?? 0) * 10) / 10;
     const avgEmoji = Math.round((row.avgEmoji ?? 0) * 100) / 100;
     const len = lengthLabel(avgWords);
@@ -170,29 +170,34 @@ export function buildPlatformVoices(db: DatabaseType, sender: string): PlatformV
 
   if (rows.length === 0) return [];
 
+  const participantCounts = conversationParticipantCounts(db);
+
+  // Count this sender's messages per conversation, then fold the dyad check in
+  // via the cached participant map. Testing `<= 2` inside SQL made it a
+  // correlated subquery that rescanned the conversation for every message row.
   const dmShareStmt = db.prepare(`
-    SELECT COUNT(*) AS n
+    SELECT m.conversation_id AS conversationId, COUNT(*) AS n
     FROM messages m
     WHERE m.sender = ?
       AND m.source = ?
       AND m.is_system = 0
       AND m.content IS NOT NULL
       AND TRIM(m.content) != ''
-      AND (
-        SELECT COUNT(DISTINCT m2.sender)
-        FROM messages m2
-        WHERE m2.conversation_id = m.conversation_id
-          AND m2.is_system = 0
-      ) <= 2
+    GROUP BY m.conversation_id
   `);
 
   return rows.map((row) => {
     const avgWords = Math.round((row.avgWords ?? 0) * 10) / 10;
     const avgEmoji = Math.round((row.avgEmoji ?? 0) * 100) / 100;
     const len = lengthLabel(avgWords);
-    const dmCount = (
-      dmShareStmt.get(sender, row.source) as { n: number } | undefined
-    )?.n ?? 0;
+    const perConv = dmShareStmt.all(sender, row.source) as Array<{
+      conversationId: string;
+      n: number;
+    }>;
+    const dmCount = perConv.reduce(
+      (sum, c) => ((participantCounts.get(c.conversationId) ?? 0) <= 2 ? sum + c.n : sum),
+      0
+    );
     const dmShare =
       row.messageCount > 0 ? Math.round((dmCount / row.messageCount) * 1000) / 1000 : 0;
 

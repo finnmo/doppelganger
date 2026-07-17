@@ -6,6 +6,7 @@
 
 import type { Database as DatabaseType } from 'better-sqlite3';
 import { extractReplyPairs } from './replyTurns.js';
+import { conversationParticipantCounts } from './conversationParticipants.js';
 
 const PLACE_HINTS = new Set([
   'melbourne', 'sydney', 'brisbane', 'perth', 'adelaide', 'canberra', 'hobart',
@@ -344,24 +345,14 @@ export function buildRelationshipCard(
 
   if (sharedConvs.length === 0) return null;
 
-  // Prefer 1:1 dyads with self first for register
-  const dyadFirst = [...sharedConvs].sort((a, b) => {
-    const countA = (
-      db
-        .prepare(
-          `SELECT COUNT(DISTINCT sender) AS n FROM messages WHERE conversation_id = ? AND is_system = 0`
-        )
-        .get(a.conversation_id) as { n: number }
-    ).n;
-    const countB = (
-      db
-        .prepare(
-          `SELECT COUNT(DISTINCT sender) AS n FROM messages WHERE conversation_id = ? AND is_system = 0`
-        )
-        .get(b.conversation_id) as { n: number }
-    ).n;
-    return countA - countB;
-  });
+  // Prefer 1:1 dyads with self first for register. Counts come from the
+  // per-connection map rather than a query per sort comparison.
+  const participantCounts = conversationParticipantCounts(db);
+  const dyadFirst = [...sharedConvs].sort(
+    (a, b) =>
+      (participantCounts.get(a.conversation_id) ?? 0) -
+      (participantCounts.get(b.conversation_id) ?? 0)
+  );
 
   const convIds = dyadFirst.map((c) => c.conversation_id);
   const placeholders = convIds.map(() => '?').join(',');

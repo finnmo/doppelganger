@@ -209,7 +209,11 @@ export async function computePersonaMetrics(): Promise<void> {
 
     const profiles: PersonaStyleProfile[] = [];
 
+    let processed = 0;
     for (const sender of senders) {
+      if (++processed % 25 === 0 || processed === senders.length) {
+        console.log(`  Persona profiles: ${processed}/${senders.length} senders`);
+      }
       const words = db.prepare(`
         SELECT m.content
         FROM messages m

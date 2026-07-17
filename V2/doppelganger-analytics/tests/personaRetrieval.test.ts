@@ -71,6 +71,7 @@ describe('buildAnthropicPersonaRequest with memories', () => {
     expect(memoryCount).toBe(1);
     expect(system).toContain('Relevant memories from their real past messages');
     expect(system).toContain('melbourne was so fun');
-    expect(system).toContain('Keep the conversation alive');
+    // Base style guidance still surrounds the injected memory block.
+    expect(system).toContain('natural engaged reply');
   });
 });
