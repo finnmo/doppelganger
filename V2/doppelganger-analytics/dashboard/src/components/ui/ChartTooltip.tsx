@@ -23,6 +23,9 @@ export function ChartTooltip({ content, ...props }: ChartTooltipProps) {
   return <Tooltip {...CHART_TOOLTIP_PROPS} {...props} content={wrappedContent} />;
 }
 
+/** Recharts finds tooltip children by displayName — must stay "Tooltip". */
+ChartTooltip.displayName = 'Tooltip';
+
 function DefaultPortalTooltip({
   active,
   payload,

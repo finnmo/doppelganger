@@ -46,7 +46,7 @@ interface FrequencyMetrics {
   communicationHealth: 'excellent' | 'good' | 'moderate' | 'low';
 }
 
-export function CommunicationFrequencyAnalysis() {
+export function CommunicationFrequencyAnalysis({ embedded = false }: { embedded?: boolean } = {}) {
   const plotRef = useRef<HTMLDivElement>(null);
   const [frequencyData, setFrequencyData] = useState<FrequencyData[]>([]);
   const [senderData, setSenderData] = useState<SenderFrequency[]>([]);
@@ -299,12 +299,17 @@ export function CommunicationFrequencyAnalysis() {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border bg-white p-4 shadow-sm sm:p-6">
-      <div className="mb-4 flex shrink-0 items-center justify-between sm:mb-6">
-        <div className="flex items-center space-x-2">
-          <MessageSquare className="w-5 h-5 text-blue-600" />
-          <h3 className="text-lg font-semibold">Communication Frequency Analysis</h3>
-        </div>
+    <div className={embedded
+      ? 'flex h-full min-h-0 flex-col'
+      : 'flex h-full min-h-0 flex-col overflow-hidden rounded-lg border bg-white p-4 shadow-sm sm:p-6'
+    }>
+      <div className={`mb-4 flex shrink-0 items-center ${embedded ? 'justify-end' : 'justify-between'} sm:mb-6`}>
+        {!embedded && (
+          <div className="flex items-center space-x-2">
+            <MessageSquare className="w-5 h-5 text-blue-600" />
+            <h3 className="text-lg font-semibold">Communication Frequency Analysis</h3>
+          </div>
+        )}
         <div className="flex space-x-2">
           <button
             onClick={() => setViewMode('timeline')}

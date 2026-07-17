@@ -14,7 +14,7 @@ export interface NormalizedReaction {
   /** Reaction emoji/content, already decoded to proper UTF-8. */
   emoji: string;
   actor: string;
-  /** Seconds since epoch when the platform provides it; 0 when unknown. */
+  /** Unix ms when the platform provides it; 0 when unknown. Some older rows may store seconds. */
   timestamp: number;
 }
 

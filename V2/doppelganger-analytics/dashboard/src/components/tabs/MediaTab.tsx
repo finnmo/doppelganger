@@ -82,7 +82,6 @@ export function MediaTab() {
           icon={Sparkles}
           accent="orange"
           className={CARD_FILL}
-          enableFullscreen={false}
           tooltip={{
             description:
               'Key media statistics computed from your real data: share rate, top sharer, and preferred formats.',

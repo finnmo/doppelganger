@@ -77,7 +77,7 @@ function getPeriod(hour: number): 'morning' | 'afternoon' | 'evening' | 'night' 
   return 'night';
 }
 
-export function DailyActivityPatterns() {
+export function DailyActivityPatterns({ embedded = false }: { embedded?: boolean } = {}) {
   const plotRef = useRef<HTMLDivElement>(null);
   const [dayData, setDayData] = useState<ProcessedDayData[]>([]);
   const [hourData, setHourData] = useState<ProcessedHourData[]>([]);
@@ -269,12 +269,17 @@ export function DailyActivityPatterns() {
     !summary.dayDataAvailable && (viewMode === 'days' || viewMode === 'radar') ? 'hours' : viewMode;
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border bg-white p-4 shadow-sm sm:p-6">
-      <div className="mb-4 flex shrink-0 items-center justify-between sm:mb-6">
-        <div className="flex items-center space-x-2">
-          <Calendar className="w-5 h-5 text-blue-600" />
-          <h3 className="text-lg font-semibold">Daily Activity Patterns</h3>
-        </div>
+    <div className={embedded
+      ? 'flex h-full min-h-0 flex-col'
+      : 'flex h-full min-h-0 flex-col overflow-hidden rounded-lg border bg-white p-4 shadow-sm sm:p-6'
+    }>
+      <div className={`mb-4 flex shrink-0 items-center ${embedded ? 'justify-end' : 'justify-between'} sm:mb-6`}>
+        {!embedded && (
+          <div className="flex items-center space-x-2">
+            <Calendar className="w-5 h-5 text-blue-600" />
+            <h3 className="text-lg font-semibold">Daily Activity Patterns</h3>
+          </div>
+        )}
         <div className="flex space-x-2">
           <button
             onClick={() => setViewMode('days')}

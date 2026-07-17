@@ -184,9 +184,12 @@ export function ChartCard({
     };
   }, [expanded, closeFullscreen]);
 
-  const fullscreenBody = fullscreenChildren ?? (
+  // Never mount the same chart tree in card + fullscreen at once — React will
+  // only attach one instance, and hover/tooltips end up bound to the hidden card.
+  const cardChildren = expanded ? null : children;
+  const fullscreenBody = (
     <div className="flex h-full min-h-0 flex-col overflow-hidden [&>div]:min-h-0 [&>div]:flex-1">
-      {children}
+      {fullscreenChildren ?? children}
     </div>
   );
 
@@ -203,7 +206,7 @@ export function ChartCard({
         radius={radius}
         shellClassName={className}
       >
-        {children}
+        {cardChildren}
       </CardShell>
 
       {mounted &&
@@ -211,6 +214,7 @@ export function ChartCard({
         typeof document !== 'undefined' &&
         createPortal(
           <div
+            data-chart-fullscreen-root
             className="fixed inset-0 z-[100] flex flex-col bg-black/50 p-2 sm:p-3 md:p-4"
             role="dialog"
             aria-modal="true"

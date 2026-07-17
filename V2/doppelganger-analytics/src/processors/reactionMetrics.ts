@@ -206,8 +206,14 @@ export async function computeReactionMetrics(): Promise<void> {
       receiver.totalReceived++;
       receiver.conversationIds.add(row.conversation_id);
 
-      // Reaction timestamps are seconds and often 0; fall back to the message time
-      const timestampMs = row.timestamp > 0 ? row.timestamp * 1000 : row.message_timestamp_ms;
+      // Reaction timestamps may be seconds or milliseconds depending on platform.
+      // Values above ~1e12 are already ms (post-2001). Fall back to message time when missing.
+      const timestampMs =
+        row.timestamp > 1e12
+          ? row.timestamp
+          : row.timestamp > 0
+            ? row.timestamp * 1000
+            : row.message_timestamp_ms;
       earliestMs = Math.min(earliestMs, timestampMs);
       latestMs = Math.max(latestMs, timestampMs);
 

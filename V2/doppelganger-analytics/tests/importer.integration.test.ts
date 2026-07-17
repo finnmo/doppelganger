@@ -164,6 +164,13 @@ describe('importArchive (platform-neutral pipeline)', () => {
     expect(messages[2].is_system).toBe(1);
     expect(messages[3].content).toBe('sounds good');
 
+    // WhatsApp exports wall-clock local times (no TZ). Must parse as local Date,
+    // not Date.UTC — otherwise heatmaps shift by the host UTC offset vs Meta/iMessage.
+    const ts = db.prepare(
+      'SELECT timestamp_ms FROM messages WHERE content = ?'
+    ).get('hello there') as { timestamp_ms: number };
+    expect(ts.timestamp_ms).toBe(new Date(2024, 2, 15, 10, 30, 45).getTime());
+
     process.env.DOPPELGANGER_DB_PATH = dbPath;
     await closeAllConnections();
   });

@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import type { TooltipProps } from 'recharts';
 import type { ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent';
 import { ChartPlotContext } from '@/components/ui/chartPlotContext';
+import { getChartTooltipHost } from '@/components/ui/tooltipHost';
 
 function clampPosition(
   anchorX: number,
@@ -59,8 +60,10 @@ export function PortalRechartsTooltip({
       return;
     }
 
+    const plotRoot = plotRef?.current;
     const plot =
-      plotRef?.current ??
+      (plotRoot?.querySelector('.recharts-wrapper') as HTMLElement | null) ??
+      plotRoot ??
       tipRef.current.closest('.recharts-responsive-container') ??
       tipRef.current.closest('[data-chart-plot]');
 
@@ -93,7 +96,7 @@ export function PortalRechartsTooltip({
     <div
       ref={tipRef}
       data-chart-portal-tooltip
-      className="pointer-events-none fixed z-[250] max-w-[min(20rem,calc(100vw-1rem))] rounded-lg border border-gray-200 bg-white shadow-lg"
+      className="pointer-events-none fixed z-[1100] max-w-[min(20rem,calc(100vw-1rem))] rounded-lg border border-gray-200 bg-white shadow-lg"
       style={
         position
           ? { left: position.left, top: position.top }
@@ -104,7 +107,7 @@ export function PortalRechartsTooltip({
     </div>
   );
 
-  return createPortal(content, document.body);
+  return createPortal(content, getChartTooltipHost());
 }
 
 export function makePortalTooltipContent(

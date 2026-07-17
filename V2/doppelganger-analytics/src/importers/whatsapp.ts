@@ -93,7 +93,7 @@ function parseDateParts(datePart: string, timePart: string): number | null {
     if (suffix === 'AM' && hours === 12) hours = 0;
   }
 
-  const ms = Date.UTC(year, month - 1, day, hours, minutes, seconds);
+  const ms = new Date(year, month - 1, day, hours, minutes, seconds).getTime();
   return Number.isNaN(ms) ? null : ms;
 }
 

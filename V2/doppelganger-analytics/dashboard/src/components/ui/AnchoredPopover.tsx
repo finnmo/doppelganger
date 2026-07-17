@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { getChartTooltipHost } from '@/components/ui/tooltipHost';
 
 export interface AnchoredPopoverProps {
   open: boolean;
@@ -132,7 +133,7 @@ export function AnchoredPopover({
       ref={popoverRef}
       id={id}
       role="tooltip"
-      className={`fixed z-[200] rounded-lg border border-gray-200 bg-white shadow-lg ${className}`}
+      className={`fixed z-[1100] rounded-lg border border-gray-200 bg-white shadow-lg ${className}`}
       style={
         position
           ? { top: position.top, left: position.left }
@@ -141,6 +142,6 @@ export function AnchoredPopover({
     >
       {children}
     </div>,
-    document.body
+    getChartTooltipHost()
   );
 }
