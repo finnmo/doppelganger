@@ -2,6 +2,15 @@ import { getDb, closeDb } from '../db/client.js';
 import chalk from 'chalk';
 import { progressReporter } from '../utils/progressReporter.js';
 import { writeDashData } from '../utils/output.js';
+import { decodeInstagramUnicode } from '../utils/unicodeDecoder.js';
+import { trimMessageSnippet } from '../utils/messageFilters.js';
+
+interface ExtremeExample {
+  text: string;
+  sender: string;
+  compound: number;
+  conversation_id: string;
+}
 
 interface SentimentTimePoint {
   date: string;
@@ -12,6 +21,7 @@ interface SentimentTimePoint {
   avgNeutral: number;
   messageCount: number;
   sentiment: 'positive' | 'negative' | 'neutral';
+  extremeExample?: ExtremeExample;
 }
 
 interface SentimentBySender {
@@ -39,12 +49,14 @@ export async function computeSentimentTimelineMetrics(): Promise<void> {
         s.negative,
         s.neutral,
         m.sender,
+        m.content,
         m.timestamp_ms,
         m.conversation_id,
         date(m.timestamp_ms / 1000, 'unixepoch', 'localtime') as date
       FROM sentiment s
       JOIN messages m ON s.message_id = m.id
       WHERE s.compound IS NOT NULL
+        AND COALESCE(m.is_system, 0) = 0
       ORDER BY m.timestamp_ms
     `).all() as Array<{
       compound: number;
@@ -52,6 +64,7 @@ export async function computeSentimentTimelineMetrics(): Promise<void> {
       negative: number;
       neutral: number;
       sender: string;
+      content: string;
       timestamp_ms: number;
       conversation_id: string;
       date: string;
@@ -76,6 +89,8 @@ export async function computeSentimentTimelineMetrics(): Promise<void> {
       neutrals: number[];
       count: number;
     }>>();
+
+    const senderDateExtreme = new Map<string, Map<string, ExtremeExample>>();
 
     // Group by conversation and date so the dashboard can rebuild an honest
     // daily timeline for any conversation selection. Sums (not averages) are
@@ -147,6 +162,25 @@ export async function computeSentimentTimelineMetrics(): Promise<void> {
       senderDateGroup.negatives.push(record.negative);
       senderDateGroup.neutrals.push(record.neutral);
       senderDateGroup.count++;
+
+      let senderExtremeDays = senderDateExtreme.get(record.sender);
+      if (!senderExtremeDays) {
+        senderExtremeDays = new Map();
+        senderDateExtreme.set(record.sender, senderExtremeDays);
+      }
+      const currentExtreme = senderExtremeDays.get(date);
+      const snippet = trimMessageSnippet(decodeInstagramUnicode(record.content), 120);
+      if (
+        snippet &&
+        (!currentExtreme || Math.abs(record.compound) > Math.abs(currentExtreme.compound))
+      ) {
+        senderExtremeDays.set(date, {
+          text: snippet,
+          sender: record.sender,
+          compound: record.compound,
+          conversation_id: record.conversation_id
+        });
+      }
     }
 
     // Process overall timeline
@@ -204,7 +238,8 @@ export async function computeSentimentTimelineMetrics(): Promise<void> {
           avgNegative: Math.round(avgNegative * 1000) / 1000,
           avgNeutral: Math.round(avgNeutral * 1000) / 1000,
           messageCount: group.count,
-          sentiment
+          sentiment,
+          extremeExample: senderDateExtreme.get(sender)?.get(date)
         });
 
         totalCompound += avgCompound * group.count;

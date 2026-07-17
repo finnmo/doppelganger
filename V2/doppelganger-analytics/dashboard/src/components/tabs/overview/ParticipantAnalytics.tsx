@@ -3,16 +3,13 @@
 import React from 'react';
 import { Camera, Heart, MessageSquare, Timer } from 'lucide-react';
 import { ChartCard } from '@/components/ui/ChartCard';
+import { RankedListPanel, type RankedItem } from '@/components/ui/RankedListPanel';
 import { CHART_MD, GRID_GAP } from '@/lib/layout';
 import type { ParticipantAnalyticsData } from './participants';
 
 interface ParticipantAnalyticsProps {
   participants: ParticipantAnalyticsData;
   totalMessages: number;
-}
-
-function truncateName(name: string, max = 22): string {
-  return name.length > max ? `${name.substring(0, max)}…` : name;
 }
 
 function formatResponseTime(ms: number): string {
@@ -22,47 +19,66 @@ function formatResponseTime(ms: number): string {
   return `${Math.round(seconds / 3600)}h`;
 }
 
-interface RankedRowProps {
-  rank: number;
-  name: string;
-  value: string;
-  sub: React.ReactNode;
-  tint: 'blue' | 'orange' | 'purple' | 'green';
+function contributorItems(
+  participants: ParticipantAnalyticsData['messageContributors'],
+  totalMessages: number
+): RankedItem[] {
+  return participants.map((c) => ({
+    id: c.participant,
+    name: c.participant,
+    value: c.total_messages.toLocaleString(),
+    numericValue: c.total_messages,
+    sub: totalMessages > 0 ? `${Math.round((c.total_messages / totalMessages) * 100)}%` : '—',
+  }));
 }
 
-const ROW_TINT: Record<RankedRowProps['tint'], { row: string; badge: string; value: string }> = {
-  blue: { row: 'bg-blue-50 border-blue-100', badge: 'bg-blue-600', value: 'text-blue-600' },
-  orange: { row: 'bg-orange-50 border-orange-100', badge: 'bg-orange-600', value: 'text-orange-600' },
-  purple: { row: 'bg-purple-50 border-purple-100', badge: 'bg-purple-600', value: 'text-purple-600' },
-  green: { row: 'bg-green-50 border-green-100', badge: 'bg-green-600', value: 'text-green-600' },
-};
-
-function RankedRow({ rank, name, value, sub, tint }: RankedRowProps) {
-  const t = ROW_TINT[tint];
-  return (
-    <div className={`flex items-center justify-between rounded-md border p-2 ${t.row}`}>
-      <div className="flex min-w-0 items-center">
-        <div className={`mr-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${t.badge}`}>
-          {rank}
-        </div>
-        <span className="truncate text-sm font-medium text-gray-800" title={name}>
-          {truncateName(name)}
-        </span>
-      </div>
-      <div className="ml-2 shrink-0 text-right">
-        <div className={`text-sm font-bold ${t.value}`}>{value}</div>
-        <div className="text-xs text-gray-600">{sub}</div>
-      </div>
-    </div>
-  );
+function responderItems(participants: ParticipantAnalyticsData['fastResponders']): RankedItem[] {
+  return participants.map((r) => ({
+    id: r.participant,
+    name: r.participant,
+    value: formatResponseTime(r.avg_response_time),
+    numericValue: r.avg_response_time > 0 ? 1 / r.avg_response_time : 0,
+    sub: 'avg response',
+  }));
 }
+
+function emojiItems(participants: ParticipantAnalyticsData['emojiUsers']): RankedItem[] {
+  return participants.map((u) => ({
+    id: u.sender,
+    name: u.sender,
+    value: u.count.toLocaleString(),
+    numericValue: u.count,
+    sub: 'emojis used',
+  }));
+}
+
+function mediaItems(participants: ParticipantAnalyticsData['mediaSharers']): RankedItem[] {
+  return participants.map((s) => ({
+    id: s.sender,
+    name: s.sender,
+    value: s.mediaShared.total.toLocaleString(),
+    numericValue: s.mediaShared.total,
+    sub: (
+      <span className="flex space-x-1">
+        <span>📸{s.mediaShared.photos}</span>
+        <span>🎥{s.mediaShared.videos}</span>
+      </span>
+    ),
+  }));
+}
+
+const CARD_LIMIT = 5;
 
 /**
  * The four participant cards: contributors, fast responders, emoji champions,
- * media sharers. Data is filtered to the current conversation selection and
- * recalculates when filters change (see each card's tooltip).
+ * media sharers. Fullscreen uses a ranked bar-list layout (like Top Words).
  */
 export function ParticipantAnalytics({ participants, totalMessages }: ParticipantAnalyticsProps) {
+  const contributors = contributorItems(participants.messageContributors, totalMessages);
+  const responders = responderItems(participants.fastResponders);
+  const emojis = emojiItems(participants.emojiUsers);
+  const media = mediaItems(participants.mediaSharers);
+
   return (
     <div className={`grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 ${GRID_GAP}`}>
       <ChartCard
@@ -78,21 +94,11 @@ export function ParticipantAnalytics({ participants, totalMessages }: Participan
             'If Alice sent 1,500 messages, Bob sent 1,200, and Carol sent 800, they would appear in that order with percentages of total messages.',
         }}
         bodyClassName={`${CHART_MD} overflow-y-auto`}
+        fullscreenChildren={
+          <RankedListPanel items={contributors} tint="blue" variant="expanded" />
+        }
       >
-        <div className="space-y-2">
-          {participants.messageContributors.map((contributor, index) => (
-            <RankedRow
-              key={contributor.participant}
-              rank={index + 1}
-              name={contributor.participant}
-              value={contributor.total_messages.toLocaleString()}
-              sub={totalMessages > 0
-                ? `${Math.round((contributor.total_messages / totalMessages) * 100)}%`
-                : '—'}
-              tint="blue"
-            />
-          ))}
-        </div>
+        <RankedListPanel items={contributors} tint="blue" limit={CARD_LIMIT} />
       </ChartCard>
 
       <ChartCard
@@ -108,19 +114,11 @@ export function ParticipantAnalytics({ participants, totalMessages }: Participan
             "If someone typically responds within 2 minutes on average, they'll show as '2m avg response' and rank higher than someone who takes 10 minutes.",
         }}
         bodyClassName={`${CHART_MD} overflow-y-auto`}
+        fullscreenChildren={
+          <RankedListPanel items={responders} tint="orange" variant="expanded" />
+        }
       >
-        <div className="space-y-2">
-          {participants.fastResponders.map((responder, index) => (
-            <RankedRow
-              key={responder.participant}
-              rank={index + 1}
-              name={responder.participant}
-              value={formatResponseTime(responder.avg_response_time)}
-              sub="avg response"
-              tint="orange"
-            />
-          ))}
-        </div>
+        <RankedListPanel items={responders} tint="orange" limit={CARD_LIMIT} />
       </ChartCard>
 
       <ChartCard
@@ -136,23 +134,16 @@ export function ParticipantAnalytics({ participants, totalMessages }: Participan
             'If Alice used 120 emojis and Bob used 40 in this chat, Alice ranks first with 120.',
         }}
         bodyClassName={`${CHART_MD} overflow-y-auto`}
+        fullscreenChildren={
+          <RankedListPanel items={emojis} tint="purple" variant="expanded" />
+        }
       >
-        <div className="space-y-2">
-          {participants.emojiUsers.length === 0 ? (
-            <p className="text-sm text-gray-500 italic">
-              Per-sender emoji counts are not available yet. Re-run “Generate analytics” to compute them.
-            </p>
-          ) : participants.emojiUsers.map((user, index) => (
-            <RankedRow
-              key={user.sender}
-              rank={index + 1}
-              name={user.sender}
-              value={user.count.toLocaleString()}
-              sub="emojis used"
-              tint="purple"
-            />
-          ))}
-        </div>
+        <RankedListPanel
+          items={emojis}
+          tint="purple"
+          limit={CARD_LIMIT}
+          emptyMessage="Per-sender emoji counts are not available yet. Re-run “Generate analytics” to compute them."
+        />
       </ChartCard>
 
       <ChartCard
@@ -168,21 +159,16 @@ export function ParticipantAnalytics({ participants, totalMessages }: Participan
             'If Tia shared 40 photos and 5 videos in this chat, she shows 45 total media.',
         }}
         bodyClassName={`${CHART_MD} overflow-y-auto`}
+        fullscreenChildren={
+          <RankedListPanel items={media} tint="green" variant="expanded" />
+        }
       >
-        <div className="space-y-2">
-          {participants.mediaSharers.length === 0 ? (
-            <p className="text-sm text-gray-500 italic">No media shares in the selected conversation(s).</p>
-          ) : participants.mediaSharers.map((sharer, index) => (
-            <RankedRow
-              key={sharer.sender}
-              rank={index + 1}
-              name={sharer.sender}
-              value={sharer.mediaShared.total.toLocaleString()}
-              sub={<span className="flex space-x-1"><span>📸{sharer.mediaShared.photos}</span><span>🎥{sharer.mediaShared.videos}</span></span>}
-              tint="green"
-            />
-          ))}
-        </div>
+        <RankedListPanel
+          items={media}
+          tint="green"
+          limit={CARD_LIMIT}
+          emptyMessage="No media shares in the selected conversation(s)."
+        />
       </ChartCard>
     </div>
   );

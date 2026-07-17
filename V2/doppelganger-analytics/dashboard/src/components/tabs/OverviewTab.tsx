@@ -12,7 +12,7 @@ import { ParticipantAnalytics } from './overview/ParticipantAnalytics';
 import { PlatformSourcesBar } from '@/components/PlatformSourcesBar';
 import { PeakActivityChart } from '@/components/PeakActivityChart';
 import { ChartCard } from '@/components/ui/ChartCard';
-import { CHART_MD, GRID_GAP, TAB_STACK } from '@/lib/layout';
+import { TAB_VIEWPORT, ROW_FILL, GRID_GAP, CARD_FILL, BODY_FILL } from '@/lib/layout';
 
 export function OverviewTab() {
   const { data, loading } = useOverviewData();
@@ -129,12 +129,17 @@ export function OverviewTab() {
   );
 
   return (
-    <div className={TAB_STACK}>
+    <div className={TAB_VIEWPORT}>
       <PlatformSourcesBar platforms={platformsForView} activeSource={activeSource} />
 
-      {/* Hero metrics render as `contents`, so they share this row with the
-          peak-activity chart: 4 cards across on xl. */}
-      <div className={`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 ${GRID_GAP}`}>
+      <div className={`${ROW_FILL} min-h-0`}>
+      <ParticipantAnalytics
+        participants={participants}
+        totalMessages={filteredMetrics.textMetrics.totalMessages}
+      />
+      </div>
+
+      <div className={`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 ${GRID_GAP} ${ROW_FILL}`}>
         <HeroMetrics metrics={filteredMetrics} avgResponseTime={avgResponseTime} />
 
         <ChartCard
@@ -149,16 +154,12 @@ export function OverviewTab() {
             example:
               "You might discover you're most active Tuesday-Thursday from 2-4 PM, or that weekends show completely different patterns.",
           }}
-          bodyClassName={CHART_MD}
+          bodyClassName={BODY_FILL}
+          className={CARD_FILL}
         >
           <PeakActivityChart />
         </ChartCard>
       </div>
-
-      <ParticipantAnalytics
-        participants={participants}
-        totalMessages={filteredMetrics.textMetrics.totalMessages}
-      />
     </div>
   );
 }

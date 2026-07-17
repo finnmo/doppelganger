@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { useConversationFilter } from '@/contexts/ConversationContext';
+import { ChartTooltip } from '@/components/ui/ChartTooltip';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell } from 'recharts';
+import { useParticipantScope } from '@/hooks/useParticipantScope';
 
 interface URLMetric {
   domain: string;
@@ -22,11 +23,47 @@ interface AggregatedURLData {
   last_seen: number;
 }
 
-export function URLDomainChart() {
+interface URLDomainChartProps {
+  /** Bar chart in card; ranked list for fullscreen. */
+  variant?: 'bar' | 'list';
+}
+
+function formatDomainLabel(domain: string): string {
+  let formatted = domain.replace(/^(https?:\/\/)?(www\.)?/, '');
+  if (formatted.includes('tiktok')) return 'TikTok';
+  if (formatted.includes('youtube') || formatted.includes('youtu.be')) return 'YouTube';
+  if (formatted.includes('instagram')) return 'Instagram';
+  if (formatted.includes('facebook')) return 'Facebook';
+  if (formatted.includes('google')) return 'Google';
+  if (formatted.includes('apple')) return 'Apple Music';
+  if (formatted.includes('spotify')) return 'Spotify';
+  if (formatted.includes('netflix')) return 'Netflix';
+  if (formatted.includes('amazon')) return 'Amazon';
+  const firstDot = formatted.indexOf('.');
+  if (firstDot > 0 && firstDot < 12) formatted = formatted.substring(0, firstDot);
+  else if (formatted.length > 12) formatted = `${formatted.substring(0, 10)}…`;
+  return formatted;
+}
+
+function getBarColor(domain: string): string {
+  if (domain.includes('youtube') || domain.includes('youtu.be')) return '#ff0000';
+  if (domain.includes('instagram') || domain.includes('ig')) return '#e4405f';
+  if (domain.includes('twitter') || domain.includes('x.com')) return '#1da1f2';
+  if (domain.includes('tiktok')) return '#000000';
+  if (domain.includes('facebook')) return '#1877f2';
+  if (domain.includes('spotify')) return '#1db954';
+  if (domain.includes('netflix')) return '#e50914';
+  if (domain.includes('amazon')) return '#ff9900';
+  if (domain.includes('google')) return '#4285f4';
+  if (domain.includes('apple')) return '#007aff';
+  return '#6366f1';
+}
+
+export function URLDomainChart({ variant = 'bar' }: URLDomainChartProps) {
   const [data, setData] = useState<AggregatedURLData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { selectedConversations, isFiltered } = useConversationFilter();
+  const { filterScopedRows, isFiltered, scopeConversationIds } = useParticipantScope();
 
   useEffect(() => {
     const loadData = async () => {
@@ -40,16 +77,10 @@ export function URLDomainChart() {
         }
         
         let urlData: URLMetric[] = await response.json();
+        urlData = filterScopedRows(urlData, { senderKey: 'sender' });
         
         if (!Array.isArray(urlData)) {
           throw new Error('Invalid URL data format');
-        }
-        
-        // Filter by selected conversations if filtering is active
-        if (isFiltered && selectedConversations.length > 0) {
-          urlData = urlData.filter(item => 
-            selectedConversations.includes(item.conversation_id)
-          );
         }
         
         // Aggregate URL data by domain
@@ -91,9 +122,8 @@ export function URLDomainChart() {
             last_seen: stats.lastSeen
           }))
           .sort((a, b) => b.total_count - a.total_count)
-          .slice(0, 12); // Top 12 domains
+          .slice(0, variant === 'list' ? 50 : 12);
 
-        console.log('URL Domain Chart Data:', aggregatedData); // Debug log
         setData(aggregatedData);
       } catch (error) {
         console.error('Error loading URL data:', error);
@@ -104,7 +134,7 @@ export function URLDomainChart() {
     };
 
     loadData();
-  }, [selectedConversations, isFiltered]);
+  }, [filterScopedRows, scopeConversationIds, variant]);
 
   if (loading) {
     return (
@@ -140,64 +170,53 @@ export function URLDomainChart() {
     );
   }
 
-  // Format domain names for better display on X-axis
-  const formatDomain = (domain: string) => {
-    // Clean up domain and make it shorter for X-axis
-    let formatted = domain.replace(/^(https?:\/\/)?(www\.)?/, '');
-    
-    // Special cases for common domains
-    if (formatted.includes('tiktok')) return 'TikTok';
-    if (formatted.includes('youtube') || formatted.includes('youtu.be')) return 'YouTube';
-    if (formatted.includes('instagram')) return 'Instagram';
-    if (formatted.includes('facebook')) return 'Facebook';
-    if (formatted.includes('google')) return 'Google';
-    if (formatted.includes('apple')) return 'Apple Music';
-    if (formatted.includes('spotify')) return 'Spotify';
-    if (formatted.includes('netflix')) return 'Netflix';
-    if (formatted.includes('amazon')) return 'Amazon';
-    if (formatted.includes('airbnb')) return 'Airbnb';
-    if (formatted.includes('ikea')) return 'IKEA';
-    
-    // For other domains, truncate at first dot or 10 chars
-    const firstDot = formatted.indexOf('.');
-    if (firstDot > 0 && firstDot < 12) {
-      formatted = formatted.substring(0, firstDot);
-    } else if (formatted.length > 12) {
-      formatted = formatted.substring(0, 10) + '...';
-    }
-    
-    return formatted;
-  };
-
-  const chartData = data.map(item => ({
+  const chartData = data.map((item) => ({
     ...item,
-    displayDomain: formatDomain(item.domain),
-    fullDomain: item.domain
+    displayDomain: formatDomainLabel(item.domain),
+    fullDomain: item.domain,
   }));
 
-  const getBarColor = (domain: string) => {
-    // Color coding based on domain type
-    if (domain.includes('youtube') || domain.includes('youtu.be')) return '#ff0000';
-    if (domain.includes('instagram') || domain.includes('ig')) return '#e4405f';
-    if (domain.includes('twitter') || domain.includes('x.com')) return '#1da1f2';
-    if (domain.includes('tiktok')) return '#000000';
-    if (domain.includes('facebook')) return '#1877f2';
-    if (domain.includes('spotify')) return '#1db954';
-    if (domain.includes('netflix')) return '#e50914';
-    if (domain.includes('amazon')) return '#ff9900';
-    if (domain.includes('google')) return '#4285f4';
-    if (domain.includes('apple')) return '#007aff';
-    return '#6366f1'; // Default indigo
-  };
+  if (variant === 'list') {
+    const maxCount = data[0]?.total_count || 1;
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="space-y-1 pr-1">
+            {data.map((item, index) => {
+              const barPct = (item.total_count / maxCount) * 100;
+              return (
+                <div key={item.domain} className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-gray-50">
+                  <span className="w-6 shrink-0 text-right text-xs text-gray-400">{index + 1}</span>
+                  <span className="w-40 shrink-0 truncate text-sm font-medium text-gray-900" title={item.domain}>
+                    {item.domain}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div
+                      className="h-2 rounded-full"
+                      style={{
+                        width: `${Math.max(barPct, 4)}%`,
+                        backgroundColor: getBarColor(item.domain),
+                        opacity: 0.75,
+                      }}
+                    />
+                  </div>
+                  <span className="w-10 shrink-0 text-right text-xs text-gray-500">
+                    {item.total_count}
+                  </span>
+                  <span className="w-16 shrink-0 text-right text-xs text-gray-400">
+                    {item.unique_senders} sender{item.unique_senders !== 1 ? 's' : ''}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col">
-      {isFiltered && (
-        <div className="mb-1 shrink-0 text-center text-xs text-blue-600">
-          Filtered across {selectedConversations.length} selected conversation{selectedConversations.length !== 1 ? 's' : ''}
-        </div>
-      )}
-
       <div className="min-h-0 flex-1">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart 
@@ -221,23 +240,21 @@ export function URLDomainChart() {
             tickLine={{ stroke: '#6b7280' }}
             label={{ value: 'Shares', angle: -90, position: 'insideLeft' }}
           />
-          <Tooltip 
+          <ChartTooltip
             content={({ active, payload }) => {
               if (active && payload && payload.length > 0) {
                 const data = payload[0].payload;
                 const firstSeenDate = new Date(data.first_seen).toLocaleDateString();
                 const lastSeenDate = new Date(data.last_seen).toLocaleDateString();
-                
+
                 return (
-                  <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg z-50">
-                    <div className="text-sm">
-                      <div className="font-semibold text-gray-900">{data.fullDomain}</div>
-                      <div className="text-gray-700">Shared: {data.total_count.toLocaleString()} time{data.total_count !== 1 ? 's' : ''}</div>
-                      <div className="text-gray-700">By: {data.unique_senders} sender{data.unique_senders !== 1 ? 's' : ''}</div>
-                      <div className="text-gray-700">In: {data.conversations} conversation{data.conversations !== 1 ? 's' : ''}</div>
-                      <div className="text-xs text-gray-500 mt-1 border-t pt-1">
-                        First: {firstSeenDate} | Last: {lastSeenDate}
-                      </div>
+                  <div className="p-3 text-sm">
+                    <div className="font-semibold text-gray-900">{data.fullDomain}</div>
+                    <div className="text-gray-700">Shared: {data.total_count.toLocaleString()} time{data.total_count !== 1 ? 's' : ''}</div>
+                    <div className="text-gray-700">By: {data.unique_senders} sender{data.unique_senders !== 1 ? 's' : ''}</div>
+                    <div className="text-gray-700">In: {data.conversations} conversation{data.conversations !== 1 ? 's' : ''}</div>
+                    <div className="mt-1 border-t pt-1 text-xs text-gray-500">
+                      First: {firstSeenDate} | Last: {lastSeenDate}
                     </div>
                   </div>
                 );
@@ -258,4 +275,8 @@ export function URLDomainChart() {
       </div>
     </div>
   );
-} 
+}
+
+export function URLDomainFullscreen() {
+  return <URLDomainChart variant="list" />;
+}

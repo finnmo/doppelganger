@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useConversationFilter } from '@/contexts/ConversationContext';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
+import { ChartTooltip } from '@/components/ui/ChartTooltip';
+import { useParticipantScope } from '@/hooks/useParticipantScope';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { MessageSquare, Users, Clock, TrendingUp, Zap, Target, Activity } from 'lucide-react';
 
 interface MonthlyMessageData {
@@ -59,7 +60,7 @@ export function CommunicationPatternsOverview() {
   const [timePatterns, setTimePatterns] = useState<TimePattern[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'patterns' | 'metrics' | 'timeline'>('patterns');
-  const { selectedConversations, isFiltered } = useConversationFilter();
+  const { filterScopedRows, scopeConversationIds, participantUnion } = useParticipantScope();
 
   useEffect(() => {
     const loadData = async () => {
@@ -67,30 +68,16 @@ export function CommunicationPatternsOverview() {
         setLoading(true);
         
         // Load multiple data sources to create comprehensive patterns
-        const [monthlyResponse, latencyResponse, engagementResponse] = await Promise.all([
+        const [monthlyResponse, latencyResponse] = await Promise.all([
           fetch('/data/monthly-messages.json'),
           fetch('/data/replyLatencyDistribution.json'),
-          fetch('/data/engagementScoring.json').catch(() => null)
         ]);
 
         const monthlyData: MonthlyMessageData[] = await monthlyResponse.json();
         const latencyData: ReplyLatencyData[] = await latencyResponse.json();
-        const engagementData: { summary?: { total_participants?: number } } | null = engagementResponse
-          ? await engagementResponse.json()
-          : null;
 
-        // Filter data if needed
-        let filteredMonthlyData = monthlyData;
-        let filteredLatencyData = latencyData;
-        
-        if (isFiltered && selectedConversations.length > 0) {
-          filteredMonthlyData = monthlyData.filter((item) => 
-            selectedConversations.includes(item.conversation_id)
-          );
-          filteredLatencyData = latencyData.filter((item) => 
-            selectedConversations.includes(item.conversation_id)
-          );
-        }
+        const filteredMonthlyData = filterScopedRows(monthlyData);
+        const filteredLatencyData = filterScopedRows(latencyData);
 
         // Analyze communication patterns from real data only
         const totalMessages = filteredMonthlyData.reduce((sum, item) => sum + item.messageCount, 0);
@@ -173,8 +160,7 @@ export function CommunicationPatternsOverview() {
             return sum + (bucketTime * count);
           }, 0) / totalResponses : 0;
 
-        const activeParticipants = engagementData?.summary?.total_participants || 
-          new Set(filteredMonthlyData.map((item) => item.conversation_id)).size;
+        const activeParticipants = participantUnion.size || 0;
 
         // Determine communication health
         let communicationHealth: 'excellent' | 'good' | 'moderate' | 'needs_attention' = 'needs_attention';
@@ -232,7 +218,7 @@ export function CommunicationPatternsOverview() {
     };
 
     loadData();
-  }, [selectedConversations, isFiltered]);
+  }, [filterScopedRows, scopeConversationIds, participantUnion]);
 
   if (loading) {
     return (
@@ -283,7 +269,7 @@ export function CommunicationPatternsOverview() {
     }
   };
 
-  const formatTooltip = (value: number, data: Partial<PatternData> & Partial<TimePattern>) => {
+  const format = (value: number, data: Partial<PatternData> & Partial<TimePattern>) => {
     return [
       <div key="tooltip" className="text-sm">
         <div className="font-semibold">{data.pattern || data.period}</div>
@@ -395,11 +381,11 @@ export function CommunicationPatternsOverview() {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="pattern" angle={-45} textAnchor="end" height={80} />
               <YAxis />
-              <Tooltip content={({ active, payload }) => {
+              <ChartTooltip content={({ active, payload }) => {
                 if (active && payload && payload.length) {
                   return (
                     <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
-                      {formatTooltip(Number(payload[0].value), payload[0].payload)}
+                      {format(Number(payload[0].value), payload[0].payload)}
                     </div>
                   );
                 }
@@ -430,11 +416,11 @@ export function CommunicationPatternsOverview() {
                   <Cell key={`cell-${index}`} fill={PATTERN_COLORS[entry.pattern as keyof typeof PATTERN_COLORS] || '#6b7280'} />
                 ))}
               </Pie>
-              <Tooltip content={({ active, payload }) => {
+              <ChartTooltip content={({ active, payload }) => {
                 if (active && payload && payload.length) {
                   return (
                     <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
-                      {formatTooltip(Number(payload[0].value), payload[0].payload)}
+                      {format(Number(payload[0].value), payload[0].payload)}
                     </div>
                   );
                 }
@@ -455,7 +441,7 @@ export function CommunicationPatternsOverview() {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="period" />
                 <YAxis domain={[0, 100]} />
-                <Tooltip />
+                <ChartTooltip />
                 <Line type="monotone" dataKey="activity" stroke="#3b82f6" strokeWidth={2} name="Relative Volume" />
               </LineChart>
             </ResponsiveContainer>

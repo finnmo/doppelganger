@@ -1,4 +1,11 @@
-import { isSystemMessage, STOP_WORDS } from '../../src/utils/messageFilters.js';
+import {
+  isSystemMessage,
+  STOP_WORDS,
+  NOTIFICATION_STOP_WORDS,
+  tokenizeParticipantName,
+  tokenizeConversationLabel,
+  buildConversationNameBlocklist,
+} from '../../src/utils/messageFilters.js';
 
 describe('messageFilters', () => {
   describe('isSystemMessage', () => {
@@ -17,6 +24,15 @@ describe('messageFilters', () => {
       expect(isSystemMessage('Tia liked a message')).toBe(true);
       expect(isSystemMessage('Finn started a call')).toBe(true);
       expect(isSystemMessage('__system__')).toBe(true);
+    });
+
+    test('detects Messenger wording and importer synthetic text', () => {
+      expect(isSystemMessage('Ella Williams sent 1 photo')).toBe(true);
+      expect(isSystemMessage('Ella Williams sent 3 photos')).toBe(true);
+      expect(isSystemMessage('ellu reacted ❤️ to your message')).toBe(true);
+      expect(isSystemMessage('Finn sent a voice message')).toBe(true);
+      expect(isSystemMessage('Finn shared a link')).toBe(true);
+      expect(isSystemMessage('GamePigeon message: Your move.')).toBe(true);
     });
 
     test('does NOT flag real messages that merely contain "sent"', () => {
@@ -42,6 +58,36 @@ describe('messageFilters', () => {
       expect(STOP_WORDS.has('and')).toBe(true);
       expect(STOP_WORDS.has('would')).toBe(true);
       expect(STOP_WORDS.has('pizza')).toBe(false);
+    });
+  });
+
+  describe('NOTIFICATION_STOP_WORDS', () => {
+    test('blocks Messenger notification tokens', () => {
+      expect(NOTIFICATION_STOP_WORDS.has('sent')).toBe(true);
+      expect(NOTIFICATION_STOP_WORDS.has('photo')).toBe(true);
+      expect(NOTIFICATION_STOP_WORDS.has('reacted')).toBe(true);
+      expect(NOTIFICATION_STOP_WORDS.has('message')).toBe(true);
+      expect(NOTIFICATION_STOP_WORDS.has('dinner')).toBe(false);
+    });
+  });
+
+  describe('buildConversationNameBlocklist', () => {
+    test('includes sender names and conversation folder tokens', () => {
+      const map = buildConversationNameBlocklist([
+        { sender: 'Ella Williams', conversation_id: 'messenger:ellu_radhu_guys' },
+      ]);
+      const blocked = map.get('messenger:ellu_radhu_guys');
+      expect(blocked?.has('ella')).toBe(true);
+      expect(blocked?.has('williams')).toBe(true);
+      expect(blocked?.has('ellu')).toBe(true);
+      expect(blocked?.has('radhu')).toBe(true);
+      expect(blocked?.has('guys')).toBe(true);
+    });
+  });
+
+  describe('tokenizeConversationLabel', () => {
+    test('splits underscore-separated folder names', () => {
+      expect(tokenizeConversationLabel('ellu_radhu_guys')).toEqual(['ellu', 'radhu', 'guys']);
     });
   });
 });

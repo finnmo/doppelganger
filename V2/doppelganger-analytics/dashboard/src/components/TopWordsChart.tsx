@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useConversationFilter } from '@/contexts/ConversationContext';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useParticipantScope } from '@/hooks/useParticipantScope';
+import { AnchoredPopover } from '@/components/ui/AnchoredPopover';
 
 interface WordData {
   word: string;
@@ -17,66 +18,116 @@ interface AggregatedWordData {
   conversations: number;
 }
 
-export function TopWordsChart() {
+interface WordExampleMessage {
+  text: string;
+  sender: string;
+  conversation_id: string;
+}
+
+interface WordExampleEntry {
+  word: string;
+  examples: WordExampleMessage[];
+}
+
+const EXTRA_STOP_WORDS = new Set([
+  'the', 'and', 'you', 'that', 'was', 'for', 'are', 'with', 'his', 'they', 'this', 'have', 'from',
+  'not', 'had', 'but', 'what', 'can', 'said', 'all', 'were', 'when', 'your', 'how', 'each', 'she',
+  'which', 'their', 'time', 'will', 'about', 'out', 'many', 'then', 'them', 'these', 'may', 'way',
+  'use', 'her', 'than', 'call', 'who', 'its', 'now', 'find', 'long', 'down', 'day', 'did', 'get',
+  'come', 'made', 'part', 'just', 'like', 'good', 'know', 'think', 'want', 'see', 'back', 'also',
+  'well', 'work', 'make', 'look', 'feel', 'going', 'really', 'yeah', 'okay', 'haha', 'lol', 'yes',
+  'sure', 'thanks', 'thank', 'nice', 'cool',
+  // Platform notification vocabulary (Messenger / Instagram system messages)
+  'sent', 'photo', 'photos', 'video', 'videos', 'reacted', 'reaction', 'reactions',
+  'message', 'messages', 'attachment', 'attachments', 'liked', 'shared', 'share',
+  'voice', 'removed', 'unsent', 'sticker', 'stickers', 'gamepigeon', 'move',
+  'named', 'changed', 'added', 'missed', 'started', 'ended',
+]);
+
+function aggregateWords(
+  wordData: WordData[],
+  limit: number
+): AggregatedWordData[] {
+  const wordMap = new Map<string, {
+    totalCount: number;
+    senders: Set<string>;
+    conversations: Set<string>;
+  }>();
+
+  for (const item of wordData) {
+    const word = item.word.toLowerCase();
+    if (word.length < 3 || EXTRA_STOP_WORDS.has(word)) continue;
+
+    let stats = wordMap.get(word);
+    if (!stats) {
+      stats = { totalCount: 0, senders: new Set(), conversations: new Set() };
+      wordMap.set(word, stats);
+    }
+    stats.totalCount += item.count;
+    stats.senders.add(item.sender);
+    stats.conversations.add(item.conversation_id);
+  }
+
+  return Array.from(wordMap.entries())
+    .map(([word, stats]) => ({
+      word,
+      total_count: stats.totalCount,
+      unique_senders: stats.senders.size,
+      conversations: stats.conversations.size,
+    }))
+    .sort((a, b) => b.total_count - a.total_count)
+    .slice(0, limit);
+}
+
+function pickRandomExample(
+  examples: WordExampleMessage[],
+  scopeIds: string[],
+  participantUnion: Set<string>
+): WordExampleMessage | null {
+  const allowed = new Set(scopeIds);
+  const pool = examples.filter(
+    (e) => allowed.has(e.conversation_id) && participantUnion.has(e.sender)
+  );
+  if (pool.length === 0) return null;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+interface TopWordsChartProps {
+  /** Cloud in card; list shows ranked top-200 for fullscreen. */
+  variant?: 'cloud' | 'list';
+}
+
+export function TopWordsChart({ variant = 'cloud' }: TopWordsChartProps) {
   const [data, setData] = useState<AggregatedWordData[]>([]);
+  const [examplesByWord, setExamplesByWord] = useState<Map<string, WordExampleMessage[]>>(new Map());
   const [loading, setLoading] = useState(true);
   const [hoveredWord, setHoveredWord] = useState<string | null>(null);
-  const { selectedConversations, isFiltered } = useConversationFilter();
+  const [hoverExample, setHoverExample] = useState<WordExampleMessage | null>(null);
+  const anchorRef = useRef<HTMLSpanElement>(null);
+  const { filterScopedRows, scopeConversationIds, participantUnion } = useParticipantScope();
+
+  const limit = variant === 'list' ? 200 : 50;
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const response = await fetch('/data/wordFrequencies.json');
-        let wordData: WordData[] = await response.json();
-        
-        // Filter by selected conversations if filtering is active
-        if (isFiltered && selectedConversations.length > 0) {
-          wordData = wordData.filter(item => 
-            selectedConversations.includes(item.conversation_id)
-          );
+        const [freqRes, exRes] = await Promise.all([
+          fetch('/data/wordFrequencies.json'),
+          fetch('/data/wordExamples.json'),
+        ]);
+        let wordData: WordData[] = await freqRes.json();
+        wordData = filterScopedRows(wordData, { senderKey: 'sender' });
+
+        setData(aggregateWords(wordData, limit));
+
+        if (exRes.ok) {
+          const examples: WordExampleEntry[] = await exRes.json();
+          const map = new Map<string, WordExampleMessage[]>();
+          for (const entry of examples) {
+            map.set(entry.word.toLowerCase(), filterScopedRows(entry.examples, { senderKey: 'sender' }));
+          }
+          setExamplesByWord(map);
         }
-        
-        // Aggregate word counts across conversations and senders
-        const wordMap = new Map<string, {
-          totalCount: number;
-          senders: Set<string>;
-          conversations: Set<string>;
-        }>();
-
-        wordData.forEach(item => {
-          const word = item.word.toLowerCase();
-          
-          // Skip very common words and short words
-          if (word.length < 3 || ['the', 'and', 'you', 'that', 'was', 'for', 'are', 'with', 'his', 'they', 'this', 'have', 'from', 'not', 'had', 'but', 'what', 'can', 'said', 'all', 'were', 'when', 'your', 'how', 'each', 'she', 'which', 'their', 'time', 'will', 'about', 'out', 'many', 'then', 'them', 'these', 'may', 'way', 'use', 'her', 'than', 'call', 'who', 'its', 'now', 'find', 'long', 'down', 'day', 'did', 'get', 'come', 'made', 'part', 'just', 'like', 'good', 'know', 'think', 'want', 'see', 'back', 'also', 'well', 'work', 'make', 'look', 'feel', 'going', 'really', 'yeah', 'okay', 'haha', 'lol', 'yes', 'sure', 'thanks', 'thank', 'nice', 'cool'].includes(word)) {
-            return;
-          }
-
-          if (!wordMap.has(word)) {
-            wordMap.set(word, {
-              totalCount: 0,
-              senders: new Set(),
-              conversations: new Set()
-            });
-          }
-          
-          const wordStats = wordMap.get(word)!;
-          wordStats.totalCount += item.count;
-          wordStats.senders.add(item.sender);
-          wordStats.conversations.add(item.conversation_id);
-        });
-
-        // Convert to array and sort by total count
-        const aggregatedData = Array.from(wordMap.entries())
-          .map(([word, stats]) => ({
-            word,
-            total_count: stats.totalCount,
-            unique_senders: stats.senders.size,
-            conversations: stats.conversations.size
-          }))
-          .sort((a, b) => b.total_count - a.total_count)
-          .slice(0, 50); // Top 50 words for word cloud
-
-        setData(aggregatedData);
       } catch (error) {
         console.error('Error loading word frequency data:', error);
       } finally {
@@ -85,100 +136,151 @@ export function TopWordsChart() {
     };
 
     loadData();
-  }, [selectedConversations, isFiltered]);
+  }, [filterScopedRows, scopeConversationIds, limit]);
+
+  const onWordEnter = useCallback(
+    (word: string) => {
+      setHoveredWord(word);
+      const examples = examplesByWord.get(word.toLowerCase()) ?? [];
+      setHoverExample(pickRandomExample(examples, scopeConversationIds, participantUnion));
+    },
+    [examplesByWord, scopeConversationIds, participantUnion]
+  );
+
+  const onWordLeave = useCallback(() => {
+    setHoveredWord(null);
+    setHoverExample(null);
+  }, []);
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64">Loading word cloud...</div>;
+    return (
+      <div className="flex h-full items-center justify-center">
+        Loading {variant === 'list' ? 'top words' : 'word cloud'}...
+      </div>
+    );
   }
 
   if (data.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="flex h-full items-center justify-center">
         <div className="text-center text-gray-500">
           <div>No word frequency data available</div>
-          {isFiltered && (
-            <div className="text-xs mt-1">
-              for selected conversations
-            </div>
-          )}
         </div>
       </div>
     );
   }
 
-  // Calculate font sizes based on frequency
   const maxCount = data[0]?.total_count || 1;
   const minCount = data[data.length - 1]?.total_count || 1;
-  
+
   const getFontSize = (count: number): number => {
-    const ratio = (count - minCount) / (maxCount - minCount);
+    const ratio = maxCount === minCount ? 1 : (count - minCount) / (maxCount - minCount);
     return Math.max(12, Math.min(48, 12 + ratio * 36));
   };
 
-  const getColor = (index: number): string => {
-    const colors = [
-      '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
-      '#06b6d4', '#f97316', '#84cc16', '#ec4899', '#6b7280',
-      '#14b8a6', '#f472b6', '#a855f7', '#22c55e', '#eab308'
-    ];
-    return colors[index % colors.length];
-  };
+  const colors = [
+    '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+    '#06b6d4', '#f97316', '#84cc16', '#ec4899', '#6b7280',
+  ];
 
-  const getOpacity = (count: number): number => {
-    const ratio = (count - minCount) / (maxCount - minCount);
-    return 0.6 + ratio * 0.4; // Range from 0.6 to 1.0
-  };
+  if (variant === 'list') {
+    return (
+      <div className="flex h-full flex-col gap-2">
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="space-y-1 pr-1">
+            {data.map((word, index) => {
+              const barPct = (word.total_count / maxCount) * 100;
+              return (
+                <div
+                  key={word.word}
+                  className="group flex items-center gap-2 rounded-md px-1 py-0.5 hover:bg-gray-50"
+                  onMouseEnter={() => onWordEnter(word.word)}
+                  onMouseLeave={onWordLeave}
+                >
+                  <span className="w-6 shrink-0 text-right text-xs text-gray-400">{index + 1}</span>
+                  <span
+                    ref={hoveredWord === word.word ? anchorRef : undefined}
+                    className="w-28 shrink-0 truncate text-sm font-medium capitalize text-gray-900"
+                  >
+                    {word.word}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div
+                      className="h-2 rounded-full bg-purple-200"
+                      style={{ width: `${Math.max(barPct, 4)}%` }}
+                    />
+                  </div>
+                  <span className="w-14 shrink-0 text-right text-xs text-gray-500">
+                    {word.total_count.toLocaleString()}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <AnchoredPopover
+          open={!!hoveredWord && !!hoverExample}
+          onOpenChange={(open) => {
+            if (!open) onWordLeave();
+          }}
+          anchorRef={anchorRef}
+          className="max-w-sm p-3"
+        >
+          {hoverExample && hoveredWord && (
+            <div className="text-sm">
+              <div className="mb-1 font-semibold capitalize text-gray-900">&ldquo;{hoveredWord}&rdquo;</div>
+              <p className="text-gray-700">&ldquo;{hoverExample.text}&rdquo;</p>
+              <p className="mt-1 text-xs text-gray-500">— {hoverExample.sender}</p>
+            </div>
+          )}
+        </AnchoredPopover>
+      </div>
+    );
+  }
 
   return (
-    <div className="h-full">
-      {isFiltered && (
-        <div className="mb-4 text-center text-xs text-blue-600">
-          Filtered across {selectedConversations.length} selected conversation{selectedConversations.length !== 1 ? 's' : ''}
-        </div>
-      )}
-      
-      <div className="relative h-full w-full overflow-hidden">
-        {/* Word Cloud Container */}
-        <div className="flex flex-wrap justify-center items-center h-full gap-2 leading-none">
-          {data.map((word, index) => (
-            <span
-              key={word.word}
-              className="cursor-pointer transition-all duration-200 hover:scale-110 select-none font-medium"
-              style={{
-                fontSize: `${getFontSize(word.total_count)}px`,
-                color: getColor(index),
-                opacity: getOpacity(word.total_count),
-                fontWeight: hoveredWord === word.word ? 'bold' : 'normal',
-                textShadow: hoveredWord === word.word ? '1px 1px 2px rgba(0,0,0,0.3)' : 'none'
-              }}
-              onMouseEnter={() => setHoveredWord(word.word)}
-              onMouseLeave={() => setHoveredWord(null)}
-              title={`"${word.word}" - Used ${word.total_count.toLocaleString()} times by ${word.unique_senders} sender${word.unique_senders !== 1 ? 's' : ''} across ${word.conversations} conversation${word.conversations !== 1 ? 's' : ''}`}
-            >
-              {word.word}
-            </span>
-          ))}
-        </div>
+    <div className="relative h-full w-full">
+      <div className="flex h-full w-full flex-wrap items-center justify-center gap-2 overflow-hidden leading-none">
+        {data.map((word, index) => (
+          <span
+            key={word.word}
+            ref={hoveredWord === word.word ? anchorRef : undefined}
+            className="cursor-pointer select-none font-medium transition-all duration-200 hover:scale-110"
+            style={{
+              fontSize: `${getFontSize(word.total_count)}px`,
+              color: colors[index % colors.length],
+              opacity: 0.6 + ((word.total_count - minCount) / (maxCount - minCount || 1)) * 0.4,
+              fontWeight: hoveredWord === word.word ? 'bold' : 'normal',
+            }}
+            onMouseEnter={() => onWordEnter(word.word)}
+            onMouseLeave={onWordLeave}
+          >
+            {word.word}
+          </span>
+        ))}
+      </div>
 
-        {/* Hover Details */}
-        {hoveredWord && (
-          <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-75 text-white p-3 rounded-t-lg">
-            {(() => {
-              const wordData = data.find(w => w.word === hoveredWord);
-              return wordData ? (
-                <div className="text-sm">
-                  <div className="font-semibold capitalize mb-1">&ldquo;{wordData.word}&rdquo;</div>
-                  <div className="flex justify-between text-xs">
-                    <span>Used {wordData.total_count.toLocaleString()} times</span>
-                    <span>{wordData.unique_senders} sender{wordData.unique_senders !== 1 ? 's' : ''}</span>
-                    <span>{wordData.conversations} conversation{wordData.conversations !== 1 ? 's' : ''}</span>
-                  </div>
-                </div>
-              ) : null;
-            })()}
+      <AnchoredPopover
+        open={!!hoveredWord && !!hoverExample}
+        onOpenChange={(open) => {
+          if (!open) onWordLeave();
+        }}
+        anchorRef={anchorRef}
+        className="max-w-sm p-3"
+      >
+        {hoverExample && hoveredWord && (
+          <div className="text-sm">
+            <div className="mb-1 font-semibold capitalize text-gray-900">&ldquo;{hoveredWord}&rdquo;</div>
+            <p className="text-gray-700">&ldquo;{hoverExample.text}&rdquo;</p>
+            <p className="mt-1 text-xs text-gray-500">— {hoverExample.sender}</p>
           </div>
         )}
-      </div>
+      </AnchoredPopover>
     </div>
   );
-} 
+}
+
+export function TopWordsFullscreen() {
+  return <TopWordsChart variant="list" />;
+}

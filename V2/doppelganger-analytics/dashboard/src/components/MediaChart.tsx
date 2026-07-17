@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { useConversationFilter } from '@/contexts/ConversationContext';
+import { ChartTooltip } from '@/components/ui/ChartTooltip';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend } from 'recharts';
+import { useParticipantScope } from '@/hooks/useParticipantScope';
 
 interface AttachmentData {
   conversation_id: string;
@@ -23,20 +24,14 @@ interface MonthlyMedia {
 export function MediaChart() {
   const [data, setData] = useState<MonthlyMedia[]>([]);
   const [loading, setLoading] = useState(true);
-  const { selectedConversations, isFiltered } = useConversationFilter();
+  const { filterScopedRows, scopeConversationIds } = useParticipantScope();
 
   useEffect(() => {
     const loadData = async () => {
       try {
         const response = await fetch('/data/attachmentTimeSeries.json');
         let attachmentData: AttachmentData[] = await response.json();
-        
-        // Filter by selected conversations if filtering is active
-        if (isFiltered && selectedConversations.length > 0) {
-          attachmentData = attachmentData.filter(item => 
-            selectedConversations.includes(item.conversation_id)
-          );
-        }
+        attachmentData = filterScopedRows(attachmentData, { senderKey: 'sender' });
         
         // Group by month and sum across filtered conversations
         const monthlyTotals = attachmentData.reduce((acc, item) => {
@@ -72,7 +67,7 @@ export function MediaChart() {
     };
 
     loadData();
-  }, [selectedConversations, isFiltered]);
+  }, [filterScopedRows, scopeConversationIds]);
 
   if (loading) {
     return <div className="flex items-center justify-center h-64">Loading...</div>;
@@ -94,7 +89,7 @@ export function MediaChart() {
             fontSize={12}
             tickFormatter={(value) => value.toLocaleString()}
           />
-          <Tooltip 
+          <ChartTooltip 
             formatter={(value, name) => {
               const label = name === 'photos' ? 'Photos' : name === 'videos' ? 'Videos' : 'Total';
               return [Number(value).toLocaleString(), label];

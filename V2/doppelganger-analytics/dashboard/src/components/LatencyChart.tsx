@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { useConversationFilter } from '@/contexts/ConversationContext';
+import { ChartTooltip } from '@/components/ui/ChartTooltip';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell } from 'recharts';
+import { useParticipantScope } from '@/hooks/useParticipantScope';
 
 interface LatencyData {
   conversation_id: string;
@@ -18,20 +19,14 @@ interface ProcessedLatencyData {
 export function LatencyChart() {
   const [data, setData] = useState<ProcessedLatencyData[]>([]);
   const [loading, setLoading] = useState(true);
-  const { selectedConversations, isFiltered } = useConversationFilter();
+  const { filterScopedRows, scopeConversationIds } = useParticipantScope();
 
   useEffect(() => {
     const loadData = async () => {
       try {
         const response = await fetch('/data/replyLatencyDistribution.json');
         let latencyData: LatencyData[] = await response.json();
-        
-        // Filter by selected conversations if filtering is active
-        if (isFiltered && selectedConversations.length > 0) {
-          latencyData = latencyData.filter(item => 
-            selectedConversations.includes(item.conversation_id)
-          );
-        }
+        latencyData = filterScopedRows(latencyData);
         
         // Aggregate counts by bucket across filtered conversations
         const bucketTotals = latencyData.reduce((acc, item) => {
@@ -60,7 +55,7 @@ export function LatencyChart() {
     };
 
     loadData();
-  }, [selectedConversations, isFiltered]);
+  }, [filterScopedRows, scopeConversationIds]);
 
   if (loading) {
     return <div className="flex items-center justify-center h-64">Loading...</div>;
@@ -80,7 +75,7 @@ export function LatencyChart() {
   };
 
   return (
-    <div className="h-64">
+    <div className="h-full min-h-0">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -94,7 +89,7 @@ export function LatencyChart() {
             fontSize={12}
             tickFormatter={(value) => value.toLocaleString()}
           />
-          <Tooltip 
+          <ChartTooltip 
             formatter={(value) => [Number(value).toLocaleString(), 'Reply Count']}
             labelStyle={{ color: '#374151' }}
             contentStyle={{ 

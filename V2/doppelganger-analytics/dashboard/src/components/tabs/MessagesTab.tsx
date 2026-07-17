@@ -2,28 +2,29 @@
 
 import React from 'react';
 import { MessageTrendChart } from '@/components/MessageTrendChart';
-import { TopWordsChart } from '@/components/TopWordsChart';
-import { URLDomainChart } from '@/components/URLDomainChart';
-import { ImportantMessagesAnalysis } from '@/components/ImportantMessagesAnalysis';
+import { TopWordsChart, TopWordsFullscreen } from '@/components/TopWordsChart';
+import { URLDomainChart, URLDomainFullscreen } from '@/components/URLDomainChart';
+import { ImportantMessagesAnalysis, ImportantMessagesFullscreen } from '@/components/ImportantMessagesAnalysis';
 import { MessageLengthChart } from '@/components/MessageLengthChart';
-import ContentTypeChart from '@/components/ContentTypeChart';
+import ContentTypeChart, { ContentTypeFullscreen } from '@/components/ContentTypeChart';
 import { ChartCard } from '@/components/ui/ChartCard';
 import { Hash, Link, FileText, Star } from 'lucide-react';
-import { CHART_MD, GRID_GAP, TAB_STACK } from '@/lib/layout';
+import { TAB_VIEWPORT, CARD_GRID_ROW, CARD_FILL, BODY_FILL } from '@/lib/layout';
 
 /**
  * Messages & Content — single-screen grid.
  * Row 1: volume trend · content types · message lengths.
- * Row 2: word cloud · URL domains · important messages (scrolls internally).
+ * Row 2: word cloud · URL domains · important messages.
  */
 export function MessagesTab() {
   return (
-    <div className={TAB_STACK}>
-      <div className={`grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 ${GRID_GAP}`}>
+    <div className={TAB_VIEWPORT}>
+      <div className={CARD_GRID_ROW('grid-cols-1 lg:grid-cols-2 xl:grid-cols-3')}>
         <ChartCard
           title="Message Volume Over Time"
           icon={Hash}
           accent="blue"
+          className={CARD_FILL}
           tooltip={{
             description:
               'Line chart showing how message volume changes over time across your selected conversations, helping identify busy periods and communication trends.',
@@ -32,7 +33,7 @@ export function MessagesTab() {
             example:
               'You might see spikes during work hours, drops on weekends, or seasonal patterns like increased activity during holidays.',
           }}
-          bodyClassName={CHART_MD}
+          bodyClassName={BODY_FILL}
         >
           <MessageTrendChart />
         </ChartCard>
@@ -41,6 +42,7 @@ export function MessagesTab() {
           title="Content Type Distribution"
           icon={FileText}
           accent="green"
+          className={CARD_FILL}
           tooltip={{
             description:
               'Categorizes and analyzes different types of message content including text length variations, emoji-only messages, link sharing, and media notifications.',
@@ -49,7 +51,8 @@ export function MessagesTab() {
             example:
               'If you have 1,000 messages: 60% short_text, 25% medium_text, 10% emoji_only, 3% link_share, 2% media_notification shows your communication style preferences.',
           }}
-          bodyClassName={CHART_MD}
+          bodyClassName={BODY_FILL}
+          fullscreenChildren={<ContentTypeFullscreen />}
         >
           <ContentTypeChart />
         </ChartCard>
@@ -58,6 +61,7 @@ export function MessagesTab() {
           title="Message Length Distribution"
           icon={FileText}
           accent="indigo"
+          className={CARD_FILL}
           tooltip={{
             description:
               'Analyzes the distribution of message lengths to understand communication styles and preferences across different word count ranges.',
@@ -66,17 +70,18 @@ export function MessagesTab() {
             example:
               'A distribution showing 40% short messages, 35% very short, 20% medium, and 5% long messages indicates preference for brief, quick communication.',
           }}
-          bodyClassName={CHART_MD}
+          bodyClassName={BODY_FILL}
         >
           <MessageLengthChart />
         </ChartCard>
       </div>
 
-      <div className={`grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 ${GRID_GAP}`}>
+      <div className={CARD_GRID_ROW('grid-cols-1 lg:grid-cols-2 xl:grid-cols-3')}>
         <ChartCard
           title="Most Frequently Used Words"
           icon={Hash}
           accent="purple"
+          className={CARD_FILL}
           tooltip={{
             description:
               'Natural language processing analysis showing the most frequently used words across all your conversations. Word cloud visualization where size represents frequency.',
@@ -85,7 +90,8 @@ export function MessagesTab() {
             example:
               'Common words might include names, greetings, expressions, and topic-specific terms. Size indicates relative frequency - larger words appear more often in your conversations.',
           }}
-          bodyClassName={`${CHART_MD} overflow-y-auto`}
+          bodyClassName={BODY_FILL}
+          fullscreenChildren={<TopWordsFullscreen />}
         >
           <TopWordsChart />
         </ChartCard>
@@ -94,6 +100,7 @@ export function MessagesTab() {
           title="URL Domain Analysis"
           icon={Link}
           accent="orange"
+          className={CARD_FILL}
           tooltip={{
             description:
               'Analyzes all URLs shared in your conversations, extracting and counting domain names to show which websites and services are most commonly shared.',
@@ -102,7 +109,8 @@ export function MessagesTab() {
             example:
               "Top domains might include social media (instagram.com, youtube.com), news sites, or work tools, revealing your group's interests and information sharing patterns.",
           }}
-          bodyClassName={CHART_MD}
+          bodyClassName={BODY_FILL}
+          fullscreenChildren={<URLDomainFullscreen />}
         >
           <URLDomainChart />
         </ChartCard>
@@ -111,6 +119,7 @@ export function MessagesTab() {
           title="Important Messages"
           icon={Star}
           accent="yellow"
+          className={CARD_FILL}
           tooltip={{
             description:
               'Identifies and scores messages by importance using multiple factors including content length, sentiment strength, engagement, media presence, and emotional content.',
@@ -119,7 +128,8 @@ export function MessagesTab() {
             example:
               'A long message with strong sentiment that received multiple responses and contains media might score 0.85, while a short acknowledgment might score 0.15.',
           }}
-          bodyClassName={`${CHART_MD} overflow-y-auto`}
+          bodyClassName={BODY_FILL}
+          fullscreenChildren={<ImportantMessagesFullscreen />}
         >
           <ImportantMessagesAnalysis />
         </ChartCard>

@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useConversationFilter } from '@/contexts/ConversationContext';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Cell } from 'recharts';
+import { ChartTooltip } from '@/components/ui/ChartTooltip';
+import { useParticipantScope } from '@/hooks/useParticipantScope';
+import { isKnownParticipant } from '@/lib/participantFilter';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Cell } from 'recharts';
 import { Users, TrendingUp, Award, MessageCircle, Zap } from 'lucide-react';
 
 interface EngagementScore {
@@ -61,7 +63,7 @@ export function EngagementScoring() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'overview' | 'detailed' | 'radar'>('overview');
-  const { selectedConversations, isFiltered } = useConversationFilter();
+  const { scopeConversationIds, participantIndex } = useParticipantScope();
 
   useEffect(() => {
     const loadData = async () => {
@@ -87,14 +89,15 @@ export function EngagementScoring() {
   const filteredData = React.useMemo(() => {
     if (!data) return data;
 
-    // Unfiltered: use global participant_scores as emitted
-    if (!isFiltered || selectedConversations.length === 0) {
-      return data;
-    }
-
-    const filteredConversationEngagement = data.conversation_engagement.filter(
-      conv => selectedConversations.includes(conv.conversation_id)
-    );
+    const scopeSet = new Set(scopeConversationIds);
+    const filteredConversationEngagement = data.conversation_engagement
+      .filter((conv) => scopeSet.has(conv.conversation_id))
+      .map((conv) => ({
+        ...conv,
+        participants: conv.participants.filter((participant) =>
+          isKnownParticipant(participantIndex, conv.conversation_id, participant.participant)
+        ),
+      }));
 
     // Aggregate only from per-conversation participant rows — never fall back to global participant_scores
     const participantMap = new Map<string, {
@@ -182,7 +185,7 @@ export function EngagementScoring() {
       participant_scores: filteredParticipantScores,
       conversation_engagement: filteredConversationEngagement
     };
-  }, [data, selectedConversations, isFiltered]);
+  }, [data, scopeConversationIds, participantIndex]);
 
   if (loading) {
     return (
@@ -317,7 +320,7 @@ export function EngagementScoring() {
                     tickFormatter={(value) => value.length > 12 ? value.substring(0, 12) + '...' : value}
                   />
                   <YAxis />
-                  <Tooltip 
+                  <ChartTooltip 
                     formatter={(value) => [value, 'Engagement Score']}
                     labelFormatter={(label) => `Participant: ${label}`}
                   />
@@ -340,7 +343,7 @@ export function EngagementScoring() {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="tier" />
                   <YAxis />
-                  <Tooltip 
+                  <ChartTooltip 
                     formatter={(value) => [value, 'Participants']}
                     labelFormatter={(label) => `${label} Engagement`}
                   />
@@ -460,7 +463,7 @@ export function EngagementScoring() {
                     strokeWidth={2}
                   />
                 ))}
-                <Tooltip />
+                <ChartTooltip />
               </RadarChart>
             </ResponsiveContainer>
           </div>

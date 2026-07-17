@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useConversationFilter } from '@/contexts/ConversationContext';
+import { useParticipantScope } from '@/hooks/useParticipantScope';
 import { Star, MessageCircle, Heart, Eye, TrendingUp, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface ImportantMessage {
@@ -14,30 +14,28 @@ interface ImportantMessage {
   conversation_id: string;
 }
 
-export function ImportantMessagesAnalysis() {
+interface ImportantMessagesAnalysisProps {
+  /** Max messages to show (card: 20, fullscreen: 50). */
+  limit?: number;
+}
+
+export function ImportantMessagesAnalysis({ limit = 20 }: ImportantMessagesAnalysisProps) {
   const [messages, setMessages] = useState<ImportantMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'top' | 'recent'>('top');
   const [expandedMessages, setExpandedMessages] = useState<Set<number>>(new Set());
-  const { selectedConversations, isFiltered } = useConversationFilter();
+  const { filterScopedRows, scopeConversationIds } = useParticipantScope();
 
   useEffect(() => {
     const loadData = async () => {
       try {
         const response = await fetch('/data/messageImportance.json');
         let importanceData: ImportantMessage[] = await response.json();
+        importanceData = filterScopedRows(importanceData, { senderKey: 'sender' });
         
-        // Filter by selected conversations if filtering is active
-        if (isFiltered && selectedConversations.length > 0) {
-          importanceData = importanceData.filter(msg => 
-            selectedConversations.includes(msg.conversation_id)
-          );
-        }
-        
-        // Sort by importance score and take top 20
         const sortedData = importanceData
           .sort((a, b) => b.importance_score - a.importance_score)
-          .slice(0, 20);
+          .slice(0, limit);
         
         setMessages(sortedData);
       } catch (error) {
@@ -48,7 +46,7 @@ export function ImportantMessagesAnalysis() {
     };
 
     loadData();
-  }, [selectedConversations, isFiltered]);
+  }, [filterScopedRows, scopeConversationIds, limit]);
 
   if (loading) {
     return <div className="flex items-center justify-center h-64">Loading important messages...</div>;
@@ -106,7 +104,7 @@ export function ImportantMessagesAnalysis() {
     : [...messages].sort((a, b) => b.timestamp_ms - a.timestamp_ms);
 
   return (
-    <div className="space-y-4">
+    <div className="flex h-full min-h-0 flex-col gap-4">
       {/* Header Controls */}
       <div className="flex justify-between items-center">
         <div>
@@ -143,7 +141,7 @@ export function ImportantMessagesAnalysis() {
       </div>
 
       {/* Messages List */}
-      <div className="space-y-3">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto">
         {displayedMessages.map((message, index) => {
           const isExpanded = expandedMessages.has(message.message_id);
           const needsTruncation = shouldTruncate(message.content);
@@ -224,4 +222,8 @@ export function ImportantMessagesAnalysis() {
       )}
     </div>
   );
-} 
+}
+
+export function ImportantMessagesFullscreen() {
+  return <ImportantMessagesAnalysis limit={50} />;
+}

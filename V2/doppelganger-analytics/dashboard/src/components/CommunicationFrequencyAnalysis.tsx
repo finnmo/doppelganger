@@ -1,8 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useConversationFilter } from '@/contexts/ConversationContext';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, AreaChart, Area } from 'recharts';
+import React, { useState, useEffect, useRef } from 'react';
+import { ChartTooltip } from '@/components/ui/ChartTooltip';
+import { ChartPlotContext } from '@/components/ui/chartPlotContext';
+import { useParticipantScope } from '@/hooks/useParticipantScope';
+import { CHART_AREA } from '@/lib/layout';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart, Bar, Cell, AreaChart, Area } from 'recharts';
 import { MessageSquare, TrendingUp, Calendar, Zap, Target, Activity } from 'lucide-react';
 
 interface MonthlyMessageData {
@@ -44,12 +47,13 @@ interface FrequencyMetrics {
 }
 
 export function CommunicationFrequencyAnalysis() {
+  const plotRef = useRef<HTMLDivElement>(null);
   const [frequencyData, setFrequencyData] = useState<FrequencyData[]>([]);
   const [senderData, setSenderData] = useState<SenderFrequency[]>([]);
   const [metrics, setMetrics] = useState<FrequencyMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'timeline' | 'senders' | 'patterns'>('timeline');
-  const { selectedConversations, isFiltered } = useConversationFilter();
+  const { filterScopedRows, scopeConversationIds } = useParticipantScope();
 
   useEffect(() => {
     const loadData = async () => {
@@ -60,21 +64,13 @@ export function CommunicationFrequencyAnalysis() {
           fetch('/data/activeHours.json')
         ]);
         let monthlyData: MonthlyMessageData[] = await monthlyResponse.json();
+        monthlyData = filterScopedRows(monthlyData);
         let activeHoursData: Array<{ conversation_id: string; sender?: string; count: number }> = [];
         try {
           activeHoursData = await activeHoursResponse.json();
+          activeHoursData = filterScopedRows(activeHoursData, { senderKey: 'sender' });
         } catch {
           activeHoursData = [];
-        }
-
-        // Filter by selected conversations if filtering is active
-        if (isFiltered && selectedConversations.length > 0) {
-          monthlyData = monthlyData.filter(item =>
-            selectedConversations.includes(item.conversation_id)
-          );
-          activeHoursData = activeHoursData.filter(item =>
-            selectedConversations.includes(item.conversation_id)
-          );
         }
 
         // Aggregate by month
@@ -230,7 +226,7 @@ export function CommunicationFrequencyAnalysis() {
     };
 
     loadData();
-  }, [selectedConversations, isFiltered]);
+  }, [filterScopedRows, scopeConversationIds]);
 
   if (loading) {
     return (
@@ -290,7 +286,7 @@ export function CommunicationFrequencyAnalysis() {
     }
   };
 
-  const formatTooltip = (value: number, data: Partial<FrequencyData> & Partial<SenderFrequency>) => {
+  const format = (value: number, data: Partial<FrequencyData> & Partial<SenderFrequency>) => {
     return [
       <div key="tooltip" className="text-sm">
         <div className="font-semibold">{data.formattedMonth || data.sender}</div>
@@ -303,8 +299,8 @@ export function CommunicationFrequencyAnalysis() {
   };
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-sm border">
-      <div className="flex items-center justify-between mb-6">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border bg-white p-4 shadow-sm sm:p-6">
+      <div className="mb-4 flex shrink-0 items-center justify-between sm:mb-6">
         <div className="flex items-center space-x-2">
           <MessageSquare className="w-5 h-5 text-blue-600" />
           <h3 className="text-lg font-semibold">Communication Frequency Analysis</h3>
@@ -338,7 +334,7 @@ export function CommunicationFrequencyAnalysis() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+      <div className="mb-4 grid shrink-0 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 sm:mb-6">
         <div className="bg-blue-50 p-4 rounded-lg">
           <div className="flex items-center space-x-2">
             <MessageSquare className="w-4 h-4 text-blue-600" />
@@ -381,18 +377,19 @@ export function CommunicationFrequencyAnalysis() {
       </div>
 
       {/* Charts */}
-      <div className="h-80">
+      <ChartPlotContext.Provider value={plotRef}>
+      <div ref={plotRef} className={CHART_AREA}>
         {viewMode === 'timeline' && (
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={frequencyData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="formattedMonth" />
               <YAxis />
-              <Tooltip content={({ active, payload }) => {
+              <ChartTooltip content={({ active, payload }) => {
                 if (active && payload && payload.length) {
                   return (
                     <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
-                      {formatTooltip(Number(payload[0].value), payload[0].payload)}
+                      {format(Number(payload[0].value), payload[0].payload)}
                     </div>
                   );
                 }
@@ -421,11 +418,11 @@ export function CommunicationFrequencyAnalysis() {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="sender" angle={-35} textAnchor="end" height={70} interval={0} fontSize={10} />
                 <YAxis />
-                <Tooltip content={({ active, payload }) => {
+                <ChartTooltip content={({ active, payload }) => {
                   if (active && payload && payload.length) {
                     return (
                       <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
-                        {formatTooltip(Number(payload[0].value), payload[0].payload)}
+                        {format(Number(payload[0].value), payload[0].payload)}
                       </div>
                     );
                   }
@@ -448,7 +445,7 @@ export function CommunicationFrequencyAnalysis() {
               <XAxis dataKey="formattedMonth" />
               <YAxis yAxisId="left" />
               <YAxis yAxisId="right" orientation="right" />
-              <Tooltip content={({ active, payload }) => {
+              <ChartTooltip content={({ active, payload }) => {
                 if (active && payload && payload.length) {
                   return (
                     <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
@@ -483,6 +480,7 @@ export function CommunicationFrequencyAnalysis() {
           </ResponsiveContainer>
         )}
       </div>
+      </ChartPlotContext.Provider>
 
       {/* Insights Panel */}
       <div className="mt-6 bg-gray-50 p-4 rounded-lg">

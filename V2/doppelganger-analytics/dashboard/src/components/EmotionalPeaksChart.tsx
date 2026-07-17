@@ -1,8 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useConversationFilter } from '@/contexts/ConversationContext';
-import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, LineChart, Line } from 'recharts';
+import { ChartTooltip } from '@/components/ui/ChartTooltip';
+import { CHART_AREA } from '@/lib/layout';
+import { useParticipantScope } from '@/hooks/useParticipantScope';
+import { isKnownParticipant, buildParticipantIndex } from '@/lib/participantFilter';
+import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart, Bar, Cell, LineChart, Line } from 'recharts';
+import { ParticipantToggleChips, allParticipantsActive, toggleParticipant } from '@/components/ParticipantToggleChips';
 import { TrendingUp, TrendingDown, Target, Zap, Heart, AlertTriangle, Users, Calendar, Activity, Info } from 'lucide-react';
 
 // Data interfaces matching the processor output
@@ -162,7 +166,8 @@ export function EmotionalPeaksChart() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'timeline' | 'triggers' | 'patterns' | 'recovery'>('timeline');
-  const { selectedConversations, isFiltered } = useConversationFilter();
+  const [activeParticipants, setActiveParticipants] = useState<Set<string>>(new Set());
+  const { filterScopedRows, isFiltered, scopeConversationIds, conversations } = useParticipantScope();
 
 
   useEffect(() => {
@@ -177,154 +182,159 @@ export function EmotionalPeaksChart() {
         }
         
         const emotionalData: EmotionalPeaksData = await response.json();
-        
-        // Filter data if conversations are selected
-        if (isFiltered && selectedConversations.length > 0) {
-          const filteredPeaksAndValleys = emotionalData.peaks_and_valleys.filter(peak => 
-            selectedConversations.includes(peak.conversation_id)
-          );
-          
-          if (filteredPeaksAndValleys.length === 0) {
-            setData({
-              summary: {
-                total_peaks: 0,
-                total_valleys: 0,
-                extreme_events: 0,
-                avg_peak_intensity: 0,
-                avg_valley_intensity: 0,
-                avg_recovery_time: 0,
-                most_volatile_period: 'N/A',
-                most_stable_period: 'N/A',
-                dominant_pattern: 'N/A'
-              },
-              peaks_and_valleys: [],
-              emotional_patterns: [],
-              trigger_analysis: [],
-              temporal_analysis: {
-                hourly_volatility: [],
-                daily_volatility: [],
-                monthly_trends: []
-              },
-              recovery_analysis: {
-                avg_peak_recovery: 0,
-                avg_valley_recovery: 0,
-                fastest_recovery: {} as EmotionalPeak,
-                slowest_recovery: {} as EmotionalPeak,
-                recovery_factors: []
-              }
-            });
-            return;
-          }
-          
-          const peaks = filteredPeaksAndValleys.filter(item => item.type === 'peak');
-          const valleys = filteredPeaksAndValleys.filter(item => item.type === 'valley');
-          const extremeEvents = filteredPeaksAndValleys.filter(item => item.intensity === 'extreme');
-          
-          // Recalculate trigger analysis for filtered data
-          const triggerMap = new Map<string, {
-            frequency: number;
-            impacts: number[];
-            keywords: Set<string>;
-            participants: Set<string>;
-          }>();
-          
-          filteredPeaksAndValleys.forEach(peak => {
+        const participantIndex = buildParticipantIndex(conversations);
+
+        const filteredPeaksAndValleys = filterScopedRows(emotionalData.peaks_and_valleys).map((peak) => ({
+          ...peak,
+          participants: peak.participants.filter((p) =>
+            isKnownParticipant(participantIndex, peak.conversation_id, p.sender)
+          ),
+        }));
+
+        if (filteredPeaksAndValleys.length === 0) {
+          setData({
+            summary: {
+              total_peaks: 0,
+              total_valleys: 0,
+              extreme_events: 0,
+              avg_peak_intensity: 0,
+              avg_valley_intensity: 0,
+              avg_recovery_time: 0,
+              most_volatile_period: 'N/A',
+              most_stable_period: 'N/A',
+              dominant_pattern: 'N/A',
+            },
+            peaks_and_valleys: [],
+            emotional_patterns: [],
+            trigger_analysis: [],
+            temporal_analysis: {
+              hourly_volatility: [],
+              daily_volatility: [],
+              monthly_trends: [],
+            },
+            recovery_analysis: {
+              avg_peak_recovery: 0,
+              avg_valley_recovery: 0,
+              fastest_recovery: {} as EmotionalPeak,
+              slowest_recovery: {} as EmotionalPeak,
+              recovery_factors: [],
+            },
+          });
+          return;
+        }
+
+        if (isFiltered) {
+          const peaks = filteredPeaksAndValleys.filter((item) => item.type === 'peak');
+          const valleys = filteredPeaksAndValleys.filter((item) => item.type === 'valley');
+          const extremeEvents = filteredPeaksAndValleys.filter((item) => item.intensity === 'extreme');
+
+          const triggerMap = new Map<
+            string,
+            {
+              frequency: number;
+              impacts: number[];
+              keywords: Set<string>;
+              participants: Set<string>;
+            }
+          >();
+
+          filteredPeaksAndValleys.forEach((peak) => {
             const trigger = peak.trigger_analysis.primary_trigger;
             if (!triggerMap.has(trigger)) {
               triggerMap.set(trigger, {
                 frequency: 0,
                 impacts: [],
                 keywords: new Set(),
-                participants: new Set()
+                participants: new Set(),
               });
             }
-            
-            const data = triggerMap.get(trigger)!;
-            data.frequency++;
-            data.impacts.push(Math.abs(peak.sentiment_score));
-            peak.trigger_analysis.keywords?.forEach(kw => data.keywords.add(kw));
-            peak.participants.forEach(p => data.participants.add(p.sender));
+            const row = triggerMap.get(trigger)!;
+            row.frequency++;
+            row.impacts.push(Math.abs(peak.sentiment_score));
+            peak.trigger_analysis.keywords?.forEach((kw) => row.keywords.add(kw));
+            peak.participants.forEach((p) => row.participants.add(p.sender));
           });
-          
-          const filteredTriggerAnalysis: TriggerAnalysis[] = Array.from(triggerMap.entries()).map(([trigger, data]) => ({
-            trigger,
-            frequency: data.frequency,
-            avg_impact: data.impacts.reduce((a, b) => a + b, 0) / data.impacts.length,
-            typical_sentiment_change: data.impacts.reduce((a, b) => a + b, 0) / data.impacts.length,
-            recovery_time: 0, // Would need temporal data to calculate properly
-            associated_keywords: Array.from(data.keywords).slice(0, 10),
-            time_patterns: [],
-            participant_sensitivity: Array.from(data.participants).map(sender => ({
-              sender,
-              sensitivity_score: 0.5, // Simplified for filtering
-              typical_response: 0.5
-            })).slice(0, 5)
-          })).sort((a, b) => b.frequency - a.frequency);
-          
-          // Recalculate recovery analysis
+
+          const filteredTriggerAnalysis: TriggerAnalysis[] = Array.from(triggerMap.entries())
+            .map(([trigger, row]) => ({
+              trigger,
+              frequency: row.frequency,
+              avg_impact: row.impacts.reduce((a, b) => a + b, 0) / row.impacts.length,
+              typical_sentiment_change: row.impacts.reduce((a, b) => a + b, 0) / row.impacts.length,
+              recovery_time: 0,
+              associated_keywords: Array.from(row.keywords).slice(0, 10),
+              time_patterns: [],
+              participant_sensitivity: Array.from(row.participants)
+                .map((sender) => ({
+                  sender,
+                  sensitivity_score: 0.5,
+                  typical_response: 0.5,
+                }))
+                .slice(0, 5),
+            }))
+            .sort((a, b) => b.frequency - a.frequency);
+
           const recoveryTimes = filteredPeaksAndValleys
-            .map(p => p.recovery_time || 0)
-            .filter(t => t > 0);
-          
-          const peakRecoveryTimes = peaks
-            .map(p => p.recovery_time || 0)
-            .filter(t => t > 0);
-          
-          const valleyRecoveryTimes = valleys
-            .map(p => p.recovery_time || 0)
-            .filter(t => t > 0);
-            
-          const fastestRecovery = filteredPeaksAndValleys.reduce((fastest, current) => 
-            (current.recovery_time || Infinity) < (fastest.recovery_time || Infinity) 
-              ? current : fastest,
-            filteredPeaksAndValleys[0] || {} as EmotionalPeak);
-          
-          // Create comprehensive filtered data
-          const filteredData: EmotionalPeaksData = {
+            .map((p) => p.recovery_time || 0)
+            .filter((t) => t > 0);
+          const peakRecoveryTimes = peaks.map((p) => p.recovery_time || 0).filter((t) => t > 0);
+          const valleyRecoveryTimes = valleys.map((p) => p.recovery_time || 0).filter((t) => t > 0);
+          const fastestRecovery = filteredPeaksAndValleys.reduce(
+            (fastest, current) =>
+              (current.recovery_time || Infinity) < (fastest.recovery_time || Infinity)
+                ? current
+                : fastest,
+            filteredPeaksAndValleys[0]
+          );
+
+          setData({
             summary: {
               total_peaks: peaks.length,
               total_valleys: valleys.length,
               extreme_events: extremeEvents.length,
-              avg_peak_intensity: peaks.length > 0 
-                ? peaks.reduce((sum, p) => sum + Math.abs(p.sentiment_score), 0) / peaks.length 
-                : 0,
-              avg_valley_intensity: valleys.length > 0 
-                ? valleys.reduce((sum, v) => sum + Math.abs(v.sentiment_score), 0) / valleys.length 
-                : 0,
-              avg_recovery_time: recoveryTimes.length > 0
-                ? recoveryTimes.reduce((a, b) => a + b, 0) / recoveryTimes.length
-                : 0,
+              avg_peak_intensity:
+                peaks.length > 0
+                  ? peaks.reduce((sum, p) => sum + Math.abs(p.sentiment_score), 0) / peaks.length
+                  : 0,
+              avg_valley_intensity:
+                valleys.length > 0
+                  ? valleys.reduce((sum, v) => sum + Math.abs(v.sentiment_score), 0) / valleys.length
+                  : 0,
+              avg_recovery_time:
+                recoveryTimes.length > 0
+                  ? recoveryTimes.reduce((a, b) => a + b, 0) / recoveryTimes.length
+                  : 0,
               most_volatile_period: 'Filtered Period',
               most_stable_period: 'Filtered Period',
-              dominant_pattern: filteredTriggerAnalysis[0]?.trigger || 'none'
+              dominant_pattern: filteredTriggerAnalysis[0]?.trigger || 'none',
             },
             peaks_and_valleys: filteredPeaksAndValleys,
-              emotional_patterns: computeFilteredPatterns(filteredPeaksAndValleys),
+            emotional_patterns: computeFilteredPatterns(filteredPeaksAndValleys),
             trigger_analysis: filteredTriggerAnalysis,
             temporal_analysis: {
               hourly_volatility: [],
               daily_volatility: [],
-              monthly_trends: []
+              monthly_trends: [],
             },
             recovery_analysis: {
-              avg_peak_recovery: peakRecoveryTimes.length > 0
-                ? peakRecoveryTimes.reduce((a, b) => a + b, 0) / peakRecoveryTimes.length
-                : 0,
-              avg_valley_recovery: valleyRecoveryTimes.length > 0
-                ? valleyRecoveryTimes.reduce((a, b) => a + b, 0) / valleyRecoveryTimes.length
-                : 0,
+              avg_peak_recovery:
+                peakRecoveryTimes.length > 0
+                  ? peakRecoveryTimes.reduce((a, b) => a + b, 0) / peakRecoveryTimes.length
+                  : 0,
+              avg_valley_recovery:
+                valleyRecoveryTimes.length > 0
+                  ? valleyRecoveryTimes.reduce((a, b) => a + b, 0) / valleyRecoveryTimes.length
+                  : 0,
               fastest_recovery: fastestRecovery,
-              slowest_recovery: fastestRecovery, // Simplified
+              slowest_recovery: fastestRecovery,
               recovery_factors: [
                 { factor: 'time_passage', impact_on_recovery: -0.2, frequency: 1.0 },
-                { factor: 'social_support', impact_on_recovery: -0.3, frequency: 0.6 }
-              ]
-            }
-          };
-          
-          setData(filteredData);
+                { factor: 'social_support', impact_on_recovery: -0.3, frequency: 0.6 },
+              ],
+            },
+          });
         } else {
-          setData(emotionalData);
+          setData({ ...emotionalData, peaks_and_valleys: filteredPeaksAndValleys });
         }
       } catch (error) {
         console.error('Error loading emotional peaks data:', error);
@@ -335,16 +345,38 @@ export function EmotionalPeaksChart() {
     };
 
     loadData();
-  }, [selectedConversations, isFiltered]);
+  }, [conversations, filterScopedRows, isFiltered, scopeConversationIds]);
 
+  React.useEffect(() => {
+    if (!data) return;
+    const names = [
+      ...new Set(data.peaks_and_valleys.flatMap((p) => p.participants.map((x) => x.sender))),
+    ];
+    setActiveParticipants(allParticipantsActive(names));
+  }, [data]);
 
-  // Loading state
+  const participantNames = React.useMemo(
+    () =>
+      data
+        ? [
+            ...new Set(data.peaks_and_valleys.flatMap((p) => p.participants.map((x) => x.sender))),
+          ].sort()
+        : [],
+    [data]
+  );
+
+  const visiblePeaks = React.useMemo(() => {
+    if (!data) return [];
+    if (activeParticipants.size === 0) return data.peaks_and_valleys;
+    return data.peaks_and_valleys.filter((p) =>
+      p.participants.some((part) => activeParticipants.has(part.sender))
+    );
+  }, [data, activeParticipants]);
+
   if (loading) {
     return (
-      <div>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-gray-500">Loading emotional analysis...</div>
-        </div>
+      <div className="flex h-full min-h-0 items-center justify-center">
+        <div className="text-gray-500">Loading emotional analysis...</div>
       </div>
     );
   }
@@ -352,15 +384,13 @@ export function EmotionalPeaksChart() {
   // Error state
   if (error || !data) {
     return (
-      <div>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <AlertTriangle className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-            <p className="text-gray-500">No Emotional Data Available</p>
-            <p className="text-sm text-gray-400">
-              {error || 'Emotional peaks analysis could not be loaded'}
-            </p>
-          </div>
+      <div className="flex h-full min-h-0 items-center justify-center">
+        <div className="text-center">
+          <AlertTriangle className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+          <p className="text-gray-500">No Emotional Data Available</p>
+          <p className="text-sm text-gray-400">
+            {error || 'Emotional peaks analysis could not be loaded'}
+          </p>
         </div>
       </div>
     );
@@ -369,15 +399,13 @@ export function EmotionalPeaksChart() {
   // Empty state
   if (data.summary.total_peaks === 0 && data.summary.total_valleys === 0) {
     return (
-      <div>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <Target className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-            <p className="text-gray-500">No Emotional Extremes Detected</p>
-            <p className="text-sm text-gray-400">
-              Your conversations show stable emotional patterns
-            </p>
-          </div>
+      <div className="flex h-full min-h-0 items-center justify-center">
+        <div className="text-center">
+          <Target className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+          <p className="text-gray-500">No Emotional Extremes Detected</p>
+          <p className="text-sm text-gray-400">
+            Your conversations show stable emotional patterns
+          </p>
         </div>
       </div>
     );
@@ -432,7 +460,7 @@ export function EmotionalPeaksChart() {
   };
 
   // Prepare timeline data
-  const timelineData = data.peaks_and_valleys
+  const timelineData = visiblePeaks
     .map(item => ({
       timestamp: item.timestamp,
       sentiment: item.sentiment_score,
@@ -441,6 +469,7 @@ export function EmotionalPeaksChart() {
       trigger: item.trigger_analysis.primary_trigger,
       confidence: item.trigger_analysis.trigger_confidence,
       participants: item.participants.length,
+      sampleMessage: item.sample_messages?.[0],
       date: formatTimestamp(item.timestamp),
       id: item.id
     }))
@@ -448,8 +477,8 @@ export function EmotionalPeaksChart() {
 
   // Render different views
   const renderTimelineView = () => (
-    <div className="space-y-4">
-      <div className="h-80">
+    <div className="flex h-full min-h-0 flex-col gap-2">
+      <div className={CHART_AREA}>
         <ResponsiveContainer width="100%" height="100%">
           <ScatterChart data={timelineData}>
             <CartesianGrid strokeDasharray="3 3" />
@@ -464,7 +493,7 @@ export function EmotionalPeaksChart() {
               domain={[-1, 1]}
               tickFormatter={(value) => value.toFixed(1)}
             />
-            <Tooltip
+            <ChartTooltip
               content={({ active, payload }) => {
                 if (active && payload && payload.length) {
                   const data = payload[0].payload;
@@ -480,6 +509,11 @@ export function EmotionalPeaksChart() {
                         <div>Trigger: {data.trigger}</div>
                         <div>Confidence: {(data.confidence * 100).toFixed(0)}%</div>
                         <div>Participants: {data.participants}</div>
+                        {data.sampleMessage && (
+                          <div className="mt-1 italic text-gray-600">
+                            &ldquo;{data.sampleMessage.content}&rdquo; — {data.sampleMessage.sender}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -502,7 +536,7 @@ export function EmotionalPeaksChart() {
       </div>
       
       {/* Timeline legend */}
-      <div className="flex justify-center space-x-6 text-sm">
+      <div className="flex shrink-0 justify-center space-x-6 text-sm">
         <div className="flex items-center space-x-2">
           <div className="w-3 h-3 rounded-full bg-green-500"></div>
           <span>Emotional Peaks</span>
@@ -518,8 +552,8 @@ export function EmotionalPeaksChart() {
   const renderTriggersView = () => (
     <div className="space-y-6">
       {/* Trigger frequency chart */}
-      <div className="h-64">
-        <h4 className="text-sm font-semibold mb-3">Trigger Frequency & Impact</h4>
+      <div className={CHART_AREA}>
+        <h4 className="mb-3 shrink-0 text-sm font-semibold">Trigger Frequency & Impact</h4>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data.trigger_analysis.slice(0, 8)}>
             <CartesianGrid strokeDasharray="3 3" />
@@ -530,7 +564,7 @@ export function EmotionalPeaksChart() {
               height={60}
             />
             <YAxis />
-            <Tooltip
+            <ChartTooltip
               content={({ active, payload }) => {
                 if (active && payload && payload.length) {
                   const data = payload[0].payload;
@@ -600,14 +634,14 @@ export function EmotionalPeaksChart() {
       </div>
 
       {/* Temporal volatility */}
-      <div className="h-64">
-        <h4 className="text-sm font-semibold mb-3">Emotional Volatility by Time</h4>
+      <div className={CHART_AREA}>
+        <h4 className="mb-3 shrink-0 text-sm font-semibold">Emotional Volatility by Time</h4>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data.temporal_analysis.hourly_volatility}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="hour" />
             <YAxis />
-            <Tooltip
+            <ChartTooltip
               content={({ active, payload }) => {
                 if (active && payload && payload.length) {
                   const data = payload[0].payload;
@@ -700,9 +734,15 @@ export function EmotionalPeaksChart() {
   );
 
   return (
-    <div>
+    <div className="flex h-full min-h-0 flex-col">
+      <ParticipantToggleChips
+        participants={participantNames}
+        active={activeParticipants}
+        onToggle={(name) => setActiveParticipants((prev) => toggleParticipant(prev, name, participantNames))}
+        className="mb-2 shrink-0"
+      />
       {/* View mode selector (card title/tooltip live in the parent ChartCard) */}
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex shrink-0 items-center justify-between">
         <div className="flex flex-wrap gap-1.5">
           {[
             { id: 'timeline', label: 'Timeline', icon: <Calendar className="w-4 h-4" /> },
@@ -727,7 +767,7 @@ export function EmotionalPeaksChart() {
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-2 gap-2 mb-3">
+      <div className="mb-3 grid shrink-0 grid-cols-2 gap-2">
         <div className="bg-green-50 p-3 rounded-lg">
           <div className="text-green-600 font-semibold text-sm">Emotional Peaks</div>
           <div className="text-xl font-bold text-green-900">{data.summary.total_peaks}</div>
@@ -751,7 +791,7 @@ export function EmotionalPeaksChart() {
       </div>
 
       {/* Main content area */}
-      <div className="min-h-96">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {viewMode === 'timeline' && renderTimelineView()}
         {viewMode === 'triggers' && renderTriggersView()}
         {viewMode === 'patterns' && renderPatternsView()}
@@ -761,7 +801,7 @@ export function EmotionalPeaksChart() {
       {/* Filtering indicator */}
       {isFiltered && (
         <div className="mt-4 text-xs text-blue-600 bg-blue-50 p-2 rounded">
-          📊 Analysis filtered to {selectedConversations.length} selected conversation{selectedConversations.length !== 1 ? 's' : ''}
+          📊 Analysis filtered to {scopeConversationIds.length} selected conversation{scopeConversationIds.length !== 1 ? 's' : ''}
         </div>
       )}
     </div>

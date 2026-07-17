@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useConversationFilter } from '@/contexts/ConversationContext';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { useParticipantScope } from '@/hooks/useParticipantScope';
+import { isKnownParticipant } from '@/lib/participantFilter';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell } from 'recharts';
+import { ChartTooltip } from '@/components/ui/ChartTooltip';
 import type { Payload, ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent';
 import { MessageSquare, Users, TrendingUp, Clock } from 'lucide-react';
 
@@ -73,7 +75,7 @@ export function TurnTakingAnalysis() {
   const [data, setData] = useState<TurnTakingMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'patterns' | 'participants' | 'health'>('patterns');
-  const { selectedConversations, isFiltered } = useConversationFilter();
+  const { scopeConversationIds, participantIndex, isFiltered } = useParticipantScope();
 
   useEffect(() => {
     const loadData = async () => {
@@ -81,85 +83,88 @@ export function TurnTakingAnalysis() {
         const response = await fetch('/data/turnTakingAnalysis.json');
         const turnData: TurnTakingMetrics = await response.json();
         
-        // Filter by selected conversations if filtering is active
-        if (isFiltered && selectedConversations.length > 0) {
-          turnData.conversation_patterns = turnData.conversation_patterns.filter(pattern => 
-            selectedConversations.includes(pattern.conversation_id)
-          );
-          
-          // Recalculate summary metrics for filtered data
-          const filteredConversations = turnData.conversation_patterns;
-          const totalParticipants = filteredConversations.reduce((sum, conv) => sum + conv.participants.length, 0);
-          const avgParticipants = filteredConversations.length > 0 ? totalParticipants / filteredConversations.length : 0;
-          const balancedCount = filteredConversations.filter(conv => conv.pattern.pattern_type === 'balanced').length;
-          const dominantCount = filteredConversations.filter(conv => conv.pattern.pattern_type === 'dominant').length;
+        const scopeSet = new Set(scopeConversationIds);
+        const filteredConversations = turnData.conversation_patterns
+          .filter((pattern) => scopeSet.has(pattern.conversation_id))
+          .map((pattern) => ({
+            ...pattern,
+            participants: pattern.participants.filter((participant) =>
+              isKnownParticipant(participantIndex, pattern.conversation_id, participant.participant)
+            ),
+          }));
 
-          // Recompute avg turn length / response time from filtered participants
-          let turnLengthSum = 0;
-          let turnLengthCount = 0;
-          let responseTimeSum = 0;
-          let responseTimeCount = 0;
-          filteredConversations.forEach(conv => {
-            conv.participants.forEach(participant => {
-              if (participant.avg_turn_length > 0) {
-                turnLengthSum += participant.avg_turn_length;
-                turnLengthCount++;
-              }
-              if (participant.avg_response_time > 0) {
-                responseTimeSum += participant.avg_response_time;
-                responseTimeCount++;
-              }
-            });
-          });
+        turnData.conversation_patterns = filteredConversations;
 
-          turnData.summary = {
-            total_conversations: filteredConversations.length,
-            avg_participants: Math.round(avgParticipants * 10) / 10,
-            balanced_conversations: balancedCount,
-            dominant_speaker_conversations: dominantCount,
-            avg_turn_length: turnLengthCount > 0 ? Math.round((turnLengthSum / turnLengthCount) * 10) / 10 : 0,
-            avg_response_time: responseTimeCount > 0 ? Math.round(responseTimeSum / responseTimeCount) : 0
-          };
-          
-          // Recalculate participant stats for filtered conversations
-          const participantMap = new Map<string, {
-            conversations: number;
-            totalTurns: number;
-            totalTurnLength: number;
-            dominanceSum: number;
-            responsivenessSum: number;
-          }>();
-          
-          filteredConversations.forEach(conv => {
-            conv.participants.forEach(participant => {
-              if (!participantMap.has(participant.participant)) {
-                participantMap.set(participant.participant, {
-                  conversations: 0,
-                  totalTurns: 0,
-                  totalTurnLength: 0,
-                  dominanceSum: 0,
-                  responsivenessSum: 0
-                });
-              }
-              
-              const stats = participantMap.get(participant.participant)!;
-              stats.conversations++;
-              stats.totalTurns += participant.turn_count;
-              stats.totalTurnLength += participant.avg_turn_length;
-              stats.dominanceSum += participant.turn_percentage;
-              stats.responsivenessSum += (1 / Math.max(participant.avg_response_time, 1)) * 1000;
-            });
+        const totalParticipants = filteredConversations.reduce((sum, conv) => sum + conv.participants.length, 0);
+        const avgParticipants = filteredConversations.length > 0 ? totalParticipants / filteredConversations.length : 0;
+        const balancedCount = filteredConversations.filter(conv => conv.pattern.pattern_type === 'balanced').length;
+        const dominantCount = filteredConversations.filter(conv => conv.pattern.pattern_type === 'dominant').length;
+
+        // Recompute avg turn length / response time from filtered participants
+        let turnLengthSum = 0;
+        let turnLengthCount = 0;
+        let responseTimeSum = 0;
+        let responseTimeCount = 0;
+        filteredConversations.forEach(conv => {
+          conv.participants.forEach(participant => {
+            if (participant.avg_turn_length > 0) {
+              turnLengthSum += participant.avg_turn_length;
+              turnLengthCount++;
+            }
+            if (participant.avg_response_time > 0) {
+              responseTimeSum += participant.avg_response_time;
+              responseTimeCount++;
+            }
           });
-          
-          turnData.participant_stats = Array.from(participantMap.entries()).map(([participant, stats]) => ({
-            participant,
-            conversations: stats.conversations,
-            avg_turn_count: Math.round(stats.totalTurns / stats.conversations),
-            avg_turn_length: Math.round((stats.totalTurnLength / stats.conversations) * 10) / 10,
-            dominance_score: Math.round((stats.dominanceSum / stats.conversations) * 10) / 10,
-            responsiveness_score: Math.round((stats.responsivenessSum / stats.conversations) * 10) / 10
-          })).sort((a, b) => b.dominance_score - a.dominance_score);
-        }
+        });
+
+        turnData.summary = {
+          total_conversations: filteredConversations.length,
+          avg_participants: Math.round(avgParticipants * 10) / 10,
+          balanced_conversations: balancedCount,
+          dominant_speaker_conversations: dominantCount,
+          avg_turn_length: turnLengthCount > 0 ? Math.round((turnLengthSum / turnLengthCount) * 10) / 10 : 0,
+          avg_response_time: responseTimeCount > 0 ? Math.round(responseTimeSum / responseTimeCount) : 0
+        };
+        
+        // Recalculate participant stats for filtered conversations
+        const participantMap = new Map<string, {
+          conversations: number;
+          totalTurns: number;
+          totalTurnLength: number;
+          dominanceSum: number;
+          responsivenessSum: number;
+        }>();
+        
+        filteredConversations.forEach(conv => {
+          conv.participants.forEach(participant => {
+            if (!participantMap.has(participant.participant)) {
+              participantMap.set(participant.participant, {
+                conversations: 0,
+                totalTurns: 0,
+                totalTurnLength: 0,
+                dominanceSum: 0,
+                responsivenessSum: 0
+              });
+            }
+            
+            const stats = participantMap.get(participant.participant)!;
+            stats.conversations++;
+            stats.totalTurns += participant.turn_count;
+            stats.totalTurnLength += participant.avg_turn_length;
+            stats.dominanceSum += participant.turn_percentage;
+            stats.responsivenessSum += (1 / Math.max(participant.avg_response_time, 1)) * 1000;
+          });
+        });
+        
+        turnData.participant_stats = Array.from(participantMap.entries()).map(([participant, stats]) => ({
+          participant,
+          conversations: stats.conversations,
+          avg_turn_count: Math.round(stats.totalTurns / stats.conversations),
+          avg_turn_length: Math.round((stats.totalTurnLength / stats.conversations) * 10) / 10,
+          dominance_score: Math.round((stats.dominanceSum / stats.conversations) * 10) / 10,
+          responsiveness_score: Math.round((stats.responsivenessSum / stats.conversations) * 10) / 10
+        })).sort((a, b) => b.dominance_score - a.dominance_score);
         
         setData(turnData);
       } catch (error) {
@@ -183,7 +188,7 @@ export function TurnTakingAnalysis() {
     };
 
     loadData();
-  }, [selectedConversations, isFiltered]);
+  }, [scopeConversationIds, participantIndex]);
 
   if (loading) {
     return (
@@ -384,7 +389,7 @@ export function TurnTakingAnalysis() {
                         domain={[0, 100]}
                         tickFormatter={(value) => `${value}%`}
                       />
-                      <Tooltip
+                      <ChartTooltip
                         content={({ active, payload }) => {
                           if (active && payload && payload.length) {
                             const row = payload[0].payload as {
@@ -441,7 +446,7 @@ export function TurnTakingAnalysis() {
                   fontSize={12}
                   tickFormatter={(value) => value.toLocaleString()}
                 />
-                <Tooltip
+                <ChartTooltip
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
                       return (
@@ -476,7 +481,7 @@ export function TurnTakingAnalysis() {
                   fontSize={12}
                   tickFormatter={(value) => `${value}%`}
                 />
-                <Tooltip
+                <ChartTooltip
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
                       return (

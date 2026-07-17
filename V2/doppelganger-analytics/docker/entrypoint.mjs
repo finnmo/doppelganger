@@ -79,12 +79,18 @@ function findExports(dir) {
     return false;
   }
 
+  // Meta wraps messages one level down: your_facebook_activity/messages/inbox
+  // (and the Instagram equivalent). Keep this in step with the nested markers
+  // in src/importers/meta/shared.ts — a root we fail to recognise here is
+  // skipped silently, with no import error to explain the missing data.
+  const META_ACTIVITY_DIRS = ['your_instagram_activity', 'your_facebook_activity'];
+
   function dirLooksLikeMessages(dirPath, dirEntries) {
     if (!dirEntries) return false;
     const localHasMessages = dirEntries.some(
       (e) =>
         (e.isDirectory() &&
-          (e.name === 'messages' || e.name === 'inbox' || e.name === 'your_instagram_activity')) ||
+          (e.name === 'messages' || e.name === 'inbox' || META_ACTIVITY_DIRS.includes(e.name))) ||
         (e.isFile() && e.name.startsWith('message_') && e.name.endsWith('.json')) ||
         (e.isFile() && (e.name === '_chat.txt' || e.name === 'chat.db'))
     );

@@ -6,7 +6,7 @@ import { TurnTakingAnalysis } from '@/components/TurnTakingAnalysis';
 import { EngagementScoring } from '@/components/EngagementScoring';
 import { ConversationStarterAnalysis } from '@/components/ConversationStarterAnalysis';
 import { ChartCard } from '@/components/ui/ChartCard';
-import { useConversationFilter } from '@/contexts/ConversationContext';
+import { useParticipantScope } from '@/hooks/useParticipantScope';
 import { Users, MessageSquare, GitBranch, Target } from 'lucide-react';
 import { GRID_GAP, TAB_STACK } from '@/lib/layout';
 
@@ -32,7 +32,7 @@ function formatDuration(durationMs: number): string {
  */
 export function ConversationsTab() {
   const [summary, setSummary] = useState<ConversationSummary | null>(null);
-  const { selectedConversations, isFiltered } = useConversationFilter();
+  const { scopeConversationIds } = useParticipantScope();
 
   useEffect(() => {
     const loadSummary = async () => {
@@ -40,18 +40,15 @@ export function ConversationsTab() {
         const response = await fetch('/data/conversationMetrics.json');
         const data = await response.json();
 
-        let conversations: Array<{
+        const scopeSet = new Set(scopeConversationIds);
+        const conversations: Array<{
           conversation_id: string;
           participants: string[];
           turns: number;
           duration_ms: number;
-        }> = data.conversations || [];
-
-        if (isFiltered && selectedConversations.length > 0) {
-          conversations = conversations.filter(conv =>
-            selectedConversations.includes(conv.conversation_id)
-          );
-        }
+        }> = (data.conversations || []).filter((conv: { conversation_id: string }) =>
+          scopeSet.has(conv.conversation_id)
+        );
 
         if (conversations.length === 0) {
           setSummary(null);
@@ -73,7 +70,7 @@ export function ConversationsTab() {
     };
 
     loadSummary();
-  }, [selectedConversations, isFiltered]);
+  }, [scopeConversationIds]);
 
   const tiles = [
     {

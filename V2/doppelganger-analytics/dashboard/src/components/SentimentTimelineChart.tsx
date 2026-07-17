@@ -1,10 +1,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { ChartTooltip } from '@/components/ui/ChartTooltip';
 import type { Payload, ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent';
+import { ParticipantToggleChips, allParticipantsActive, toggleParticipant } from '@/components/ParticipantToggleChips';
 import { TrendingUp, TrendingDown, Calendar, User, BarChart3 } from 'lucide-react';
-import { useConversationFilter } from '@/contexts/ConversationContext';
+import { CHART_AREA } from '@/lib/layout';
+import { useParticipantScope } from '@/hooks/useParticipantScope';
 import {
   buildTimelineFromDailyRows,
   buildSenderTimelineFromDailyRows,
@@ -23,6 +26,12 @@ interface SentimentTimePoint {
   avgNeutral: number;
   messageCount: number;
   sentiment: 'positive' | 'negative' | 'neutral';
+  extremeExample?: {
+    text: string;
+    sender: string;
+    compound: number;
+    conversation_id: string;
+  };
 }
 
 interface SentimentBySender {
@@ -69,43 +78,37 @@ const SentimentTimelineChart: React.FC = () => {
   const [data, setData] = useState<SentimentTimelineData | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'overall' | 'sender'>('overall');
-  const [selectedSender, setSelectedSender] = useState<string>('');
   const [chartType, setChartType] = useState<'line' | 'area'>('area');
-  const { selectedConversations, isFiltered } = useConversationFilter();
+  const [activeParticipants, setActiveParticipants] = useState<Set<string>>(new Set());
+  const { conversations, filterScopedRows, isFiltered, scopeConversationIds, participantUnion } =
+    useParticipantScope();
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        if (!isFiltered || selectedConversations.length === 0) {
-          // Use pre-computed data when no filtering
+        if (!isFiltered || scopeConversationIds.length === 0) {
           const response = await fetch('/data/sentimentTimelineMetrics.json');
           const timelineData: SentimentTimelineData = await response.json();
           setData(timelineData);
-          if (timelineData.senderTimelines.length > 0) {
-            setSelectedSender(timelineData.senderTimelines[0].sender);
-          }
         } else {
           const [dailyResponse, dailySenderResponse, sentimentResponse] = await Promise.all([
             fetch('/data/sentimentDailyByConversation.json'),
             fetch('/data/sentimentDailyBySender.json'),
-            fetch('/data/sentimentBySender.json')
+            fetch('/data/sentimentBySender.json'),
           ]);
 
-          const dailyRows: SentimentDailyRow[] = dailyResponse.ok
-            ? await dailyResponse.json()
-            : [];
+          const dailyRows: SentimentDailyRow[] = dailyResponse.ok ? await dailyResponse.json() : [];
           const dailySenderRows: SentimentDailyBySenderRow[] = dailySenderResponse.ok
             ? await dailySenderResponse.json()
             : [];
 
           let sentimentData: RawSentimentData[] = await sentimentResponse.json();
-          sentimentData = sentimentData.filter(item =>
-            selectedConversations.includes(item.conversation_id)
-          );
+          sentimentData = filterScopedRows(sentimentData, { senderKey: 'sender' });
+          const scopedDaily = filterScopedRows(dailySenderRows, { senderKey: 'sender' });
 
           const overallTimeline = buildTimelineFromDailyRows(
             Array.isArray(dailyRows) ? dailyRows : [],
-            selectedConversations
+            scopeConversationIds
           );
 
           if (sentimentData.length === 0 && overallTimeline.length === 0) {
@@ -116,13 +119,11 @@ const SentimentTimelineChart: React.FC = () => {
           const processedData = processFilteredSentimentData(
             sentimentData,
             overallTimeline,
-            Array.isArray(dailySenderRows) ? dailySenderRows : [],
-            selectedConversations
+            Array.isArray(scopedDaily) ? scopedDaily : [],
+            scopeConversationIds,
+            conversations
           );
           setData(processedData);
-          if (processedData.senderTimelines.length > 0) {
-            setSelectedSender(processedData.senderTimelines[0].sender);
-          }
         }
       } catch (error) {
         console.error('Error loading sentiment timeline data:', error);
@@ -132,17 +133,26 @@ const SentimentTimelineChart: React.FC = () => {
     };
 
     loadData();
-  }, [selectedConversations, isFiltered]);
+  }, [conversations, filterScopedRows, isFiltered, scopeConversationIds]);
+
+  React.useEffect(() => {
+    if (!data) return;
+    const names = data.senderTimelines
+      .map((s) => s.sender)
+      .filter((s) => participantUnion.has(s));
+    setActiveParticipants(allParticipantsActive(names));
+  }, [data, participantUnion]);
 
   const processFilteredSentimentData = (
     sentimentData: RawSentimentData[],
     overallTimeline: SentimentTimePoint[],
     dailySenderRows: SentimentDailyBySenderRow[],
-    selectedConversations: string[]
+    selectedConversations: string[],
+    conversationRecords: Array<{ conversation_id: string; participants: string[] }>
   ): SentimentTimelineData => {
-    const uniqueSenders = [...new Set(sentimentData.map(item => item.sender))];
+    const uniqueSenders = [...new Set(sentimentData.map((item) => item.sender))];
 
-    const senderTimelines: SentimentBySender[] = uniqueSenders.map(sender => {
+    const senderTimelines: SentimentBySender[] = uniqueSenders.map((sender) => {
       const senderData = sentimentData.filter(item => item.sender === sender);
       const totalMessages = senderData.reduce((sum, item) => sum + item.message_count, 0) || 1;
       const avgCompound = senderData.reduce((sum, item) => sum + (item.avg_sentiment * item.message_count), 0) / totalMessages;
@@ -151,7 +161,12 @@ const SentimentTimelineChart: React.FC = () => {
       const avgNeutral = senderData.reduce((sum, item) => sum + (item.avg_neutral * item.message_count), 0) / totalMessages;
 
       const timeSeries = dailySenderRows.length > 0
-        ? buildSenderTimelineFromDailyRows(dailySenderRows, selectedConversations, sender)
+        ? buildSenderTimelineFromDailyRows(
+            dailySenderRows,
+            selectedConversations,
+            sender,
+            conversationRecords
+          )
         : [];
 
       return {
@@ -203,28 +218,48 @@ const SentimentTimelineChart: React.FC = () => {
 
   const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<Payload<ValueType, NameType>> }) => {
     if (active && payload && payload.length > 0) {
-      const data = payload[0].payload;
+      const point = payload[0].payload as Record<string, unknown>;
+      const dataKey = String(payload[0].dataKey ?? 'avgCompound');
+      const isSenderSeries = viewMode === 'sender' && dataKey !== 'avgCompound';
+      const avgCompound = isSenderSeries
+        ? (point[dataKey] as number | null)
+        : (point.avgCompound as number);
+      const extremeExample = isSenderSeries
+        ? (point[`__example_${dataKey}`] as SentimentTimePoint['extremeExample'])
+        : (point.extremeExample as SentimentTimePoint['extremeExample']);
+      const messageCount = isSenderSeries ? undefined : (point.messageCount as number);
+
       return (
         <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-lg">
           <div className="flex items-center gap-2 mb-2">
             <Calendar className="w-4 h-4" />
-            <span className="font-semibold">{formatDate(data.date)}</span>
-            {getSentimentIcon(data.avgCompound)}
+            <span className="font-semibold">{formatDate(String(point.date))}</span>
+            {typeof avgCompound === 'number' && getSentimentIcon(avgCompound)}
           </div>
           <div className="space-y-1 text-sm">
-            <p><strong>Sentiment Score:</strong> {data.avgCompound.toFixed(3)}</p>
-            <p><strong>Messages:</strong> {data.messageCount.toLocaleString()}</p>
+            {isSenderSeries && <p><strong>Sender:</strong> {dataKey}</p>}
+            <p><strong>Sentiment Score:</strong> {Number(avgCompound).toFixed(3)}</p>
+            {messageCount != null && (
+              <p><strong>Messages:</strong> {messageCount.toLocaleString()}</p>
+            )}
+            {!isSenderSeries && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2 text-xs">
               <div className="text-green-600">
-                <span className="font-medium">Positive:</span> {(data.avgPositive * 100).toFixed(1)}%
+                <span className="font-medium">Positive:</span> {((point.avgPositive as number) * 100).toFixed(1)}%
               </div>
               <div className="text-red-600">
-                <span className="font-medium">Negative:</span> {(data.avgNegative * 100).toFixed(1)}%
+                <span className="font-medium">Negative:</span> {((point.avgNegative as number) * 100).toFixed(1)}%
               </div>
               <div className="text-gray-600">
-                <span className="font-medium">Neutral:</span> {(data.avgNeutral * 100).toFixed(1)}%
+                <span className="font-medium">Neutral:</span> {((point.avgNeutral as number) * 100).toFixed(1)}%
               </div>
             </div>
+            )}
+            {extremeExample?.text && (
+              <p className="mt-2 text-xs text-gray-600 italic">
+                Driven by: &ldquo;{extremeExample.text}&rdquo; — {extremeExample.sender}
+              </p>
+            )}
           </div>
         </div>
       );
@@ -256,11 +291,42 @@ const SentimentTimelineChart: React.FC = () => {
     );
   }
 
-  const currentData = viewMode === 'overall' 
-    ? data.overallTimeline 
-    : data.senderTimelines.find(s => s.sender === selectedSender)?.timeSeries || [];
+  const senderNames = data.senderTimelines
+    .map((s) => s.sender)
+    .filter((s) => participantUnion.has(s));
+  const visibleSenders = senderNames.filter((s) => activeParticipants.has(s));
 
-  if (viewMode === 'sender' && currentData.length === 0) {
+  const chartData =
+    viewMode === 'overall'
+      ? data.overallTimeline.map((point) => ({
+          ...point,
+          formattedDate: formatDate(point.date),
+          displayDate: new Date(point.date).toLocaleDateString('en-US', {
+            month: 'numeric',
+            day: 'numeric',
+          }),
+        }))
+      : [...new Set(data.senderTimelines.flatMap((t) => t.timeSeries.map((p) => p.date)))]
+          .sort()
+          .map((date) => {
+            const row: Record<string, unknown> = {
+              date,
+              formattedDate: formatDate(date),
+              displayDate: new Date(date).toLocaleDateString('en-US', {
+                month: 'numeric',
+                day: 'numeric',
+              }),
+            };
+            for (const timeline of data.senderTimelines) {
+              if (!activeParticipants.has(timeline.sender)) continue;
+              const pt = timeline.timeSeries.find((p) => p.date === date);
+              row[timeline.sender] = pt?.avgCompound ?? null;
+              row[`__example_${timeline.sender}`] = pt?.extremeExample;
+            }
+            return row;
+          });
+
+  if (viewMode === 'sender' && visibleSenders.length === 0) {
     return (
       <div className="space-y-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 text-sm">
@@ -291,17 +357,10 @@ const SentimentTimelineChart: React.FC = () => {
     );
   }
 
-  // Prepare chart data with formatted dates
-  const chartData = currentData.map(point => ({
-    ...point,
-    formattedDate: formatDate(point.date),
-    displayDate: new Date(point.date).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })
-  }));
-
   return (
-    <div className="space-y-6">
+    <div className="flex h-full min-h-0 flex-col gap-3">
         {/* Summary Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 text-sm">
+        <div className="grid shrink-0 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 text-sm">
           <div className="bg-blue-50 p-3 rounded">
             <div className="text-blue-800 font-medium">{data.summary.totalDays}</div>
             <div className="text-blue-600">Days Analyzed</div>
@@ -321,7 +380,7 @@ const SentimentTimelineChart: React.FC = () => {
         </div>
 
         {/* Controls */}
-        <div className="flex flex-wrap gap-4 items-center">
+        <div className="flex shrink-0 flex-wrap gap-4 items-center">
           {/* View Mode Toggle */}
           <div className="flex bg-gray-100 rounded-lg p-1">
             <button
@@ -341,7 +400,10 @@ const SentimentTimelineChart: React.FC = () => {
                   ? 'bg-white text-blue-600 shadow-sm' 
                   : 'text-gray-600 hover:text-gray-900'
               }`}
-              onClick={() => setViewMode('sender')}
+              onClick={() => {
+                setViewMode('sender');
+                setChartType('line');
+              }}
             >
             <User className="w-4 h-4 inline mr-1" />
               By Sender
@@ -350,17 +412,13 @@ const SentimentTimelineChart: React.FC = () => {
 
           {/* Sender Selection */}
           {viewMode === 'sender' && (
-            <select
-              value={selectedSender}
-              onChange={(e) => setSelectedSender(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-            {data.senderTimelines.map(timeline => (
-              <option key={timeline.sender} value={timeline.sender}>
-                {timeline.sender} ({timeline.overallSentiment.totalMessages.toLocaleString()} messages)
-                </option>
-              ))}
-            </select>
+            <ParticipantToggleChips
+              participants={senderNames}
+              active={activeParticipants}
+              onToggle={(name) =>
+                setActiveParticipants((prev) => toggleParticipant(prev, name, senderNames))
+              }
+            />
           )}
 
           {/* Chart Type Toggle */}
@@ -389,9 +447,9 @@ const SentimentTimelineChart: React.FC = () => {
       </div>
 
       {/* Chart */}
-      <div className="h-80">
+      <div className={CHART_AREA}>
         <ResponsiveContainer width="100%" height="100%">
-          {chartType === 'area' ? (
+          {chartType === 'area' && viewMode === 'overall' ? (
             <AreaChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis 
@@ -409,7 +467,7 @@ const SentimentTimelineChart: React.FC = () => {
                 domain={[-1, 1]}
                 tickFormatter={(value) => value.toFixed(1)}
               />
-              <Tooltip content={<CustomTooltip />} />
+              <ChartTooltip content={<CustomTooltip />} />
               <Area
                 type="monotone"
                 dataKey="avgCompound"
@@ -436,7 +494,20 @@ const SentimentTimelineChart: React.FC = () => {
                 domain={[-1, 1]}
                 tickFormatter={(value) => value.toFixed(1)}
               />
-              <Tooltip content={<CustomTooltip />} />
+              <ChartTooltip content={<CustomTooltip />} />
+              {viewMode === 'sender' ? (
+                visibleSenders.map((sender, i) => (
+                  <Line
+                    key={sender}
+                    type="monotone"
+                    dataKey={sender}
+                    stroke={['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#6b7280'][i % 6]}
+                    strokeWidth={2}
+                    dot={false}
+                    connectNulls
+                  />
+                ))
+              ) : (
               <Line
                 type="monotone"
                 dataKey="avgCompound"
@@ -445,6 +516,7 @@ const SentimentTimelineChart: React.FC = () => {
                 dot={{ fill: '#8b5cf6', strokeWidth: 2, r: 4 }}
                 activeDot={{ r: 6, stroke: '#8b5cf6', strokeWidth: 2, fill: '#fff' }}
               />
+              )}
             </LineChart>
           )}
         </ResponsiveContainer>

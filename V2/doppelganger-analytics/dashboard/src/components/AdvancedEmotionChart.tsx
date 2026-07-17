@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { useConversationFilter } from '@/contexts/ConversationContext';
+import { ChartTooltip } from '@/components/ui/ChartTooltip';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell } from 'recharts';
+import { useParticipantScope } from '@/hooks/useParticipantScope';
+import { CHART_AREA } from '@/lib/layout';
 import { AlertCircle, Brain } from 'lucide-react';
 
 interface EmotionData {
@@ -87,7 +89,7 @@ export function AdvancedEmotionChart() {
   const [selectedSender, setSelectedSender] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { selectedConversations, isFiltered } = useConversationFilter();
+  const { filterScopedRows, isFiltered, scopeConversationIds } = useParticipantScope();
 
   useEffect(() => {
     const loadData = async () => {
@@ -100,11 +102,13 @@ export function AdvancedEmotionChart() {
         let emotionData: EmotionData[] = await response.json();
         if (!Array.isArray(emotionData)) throw new Error('Invalid emotion data format');
 
-        if (isFiltered && selectedConversations.length > 0) {
-          emotionData = emotionData.filter(e =>
-            e.conversation_id && selectedConversations.includes(e.conversation_id)
-          );
-        }
+        emotionData = filterScopedRows(
+          emotionData.filter(
+            (e): e is EmotionData & { conversation_id: string; sender: string } =>
+              !!e.conversation_id && !!e.sender
+          ),
+          { senderKey: 'sender' }
+        );
 
         setRawData(emotionData);
         const senders = [...new Set(emotionData.map(e => e.sender).filter(Boolean))] as string[];
@@ -116,7 +120,7 @@ export function AdvancedEmotionChart() {
       }
     };
     loadData();
-  }, [selectedConversations, isFiltered]);
+  }, [filterScopedRows, scopeConversationIds]);
 
   const senders = useMemo(
     () => [...new Set(rawData.map(e => e.sender).filter(Boolean))].sort() as string[],
@@ -160,8 +164,8 @@ export function AdvancedEmotionChart() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
+    <div className="flex h-full min-h-0 flex-col gap-3">
+      <div className="flex shrink-0 items-center gap-3">
         <label htmlFor="emotion-sender" className="text-sm text-gray-600">Sender:</label>
         <select
           id="emotion-sender"
@@ -175,13 +179,13 @@ export function AdvancedEmotionChart() {
         </select>
       </div>
 
-      <div className="h-64">
+      <div className={CHART_AREA}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
             <XAxis dataKey="category" stroke="#6b7280" fontSize={12} angle={-45} textAnchor="end" height={80} />
             <YAxis stroke="#6b7280" fontSize={12} tickFormatter={(v) => `${v}%`} />
-            <Tooltip
+            <ChartTooltip
               formatter={(value, name, props) => {
                 if (name === 'value') {
                   const intensity = props.payload?.intensity || 'unknown';

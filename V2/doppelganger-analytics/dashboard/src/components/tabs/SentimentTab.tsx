@@ -9,22 +9,17 @@ import SentimentTimelineChart from '@/components/SentimentTimelineChart';
 import MoodCorrelationChart from '@/components/MoodCorrelationChart';
 import { ChartCard } from '@/components/ui/ChartCard';
 import { Heart, Smile, Brain, TrendingUp, Users, Zap } from 'lucide-react';
-import { CHART_MD, CHART_LG, GRID_GAP, TAB_STACK } from '@/lib/layout';
+import { TAB_VIEWPORT, CARD_FILL, BODY_FILL, CARD_GRID_ROW } from '@/lib/layout';
 
-/**
- * Sentiment & Emotions — single-screen grid.
- * Row 1: sentiment by sender · emotion distribution · advanced emotions.
- * Row 2: sentiment timeline · mood correlation · emotional peaks
- * (the richer analyses scroll internally so the page never grows).
- */
 export function SentimentTab() {
   return (
-    <div className={TAB_STACK}>
-      <div className={`grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 ${GRID_GAP}`}>
+    <div className={TAB_VIEWPORT}>
+      <div className={CARD_GRID_ROW('grid-cols-1 lg:grid-cols-2 xl:grid-cols-3')}>
         <ChartCard
           title="Sentiment by Sender"
           icon={Heart}
           accent="red"
+          className={CARD_FILL}
           tooltip={{
             description:
               'Analyzes the average sentiment score for each conversation participant, showing who tends to communicate with more positive, negative, or neutral emotional tone.',
@@ -33,7 +28,7 @@ export function SentimentTab() {
             example:
               'A sender with 0.65 average sentiment indicates predominantly positive communication, while -0.32 suggests more negative or critical messaging patterns.',
           }}
-          bodyClassName={`${CHART_MD} overflow-y-auto`}
+          bodyClassName={BODY_FILL}
         >
           <SentimentChart />
         </ChartCard>
@@ -42,6 +37,7 @@ export function SentimentTab() {
           title="Emotion Distribution"
           icon={Smile}
           accent="pink"
+          className={CARD_FILL}
           tooltip={{
             description:
               'Shows the distribution of basic emotions (joy, sadness, anger, fear, surprise) detected across all messages using natural language processing and emotion recognition algorithms.',
@@ -50,7 +46,7 @@ export function SentimentTab() {
             example:
               '40% joy, 25% surprise, 20% sadness, 10% anger, 5% fear indicates predominantly positive emotional expression with occasional negative emotions.',
           }}
-          bodyClassName={`${CHART_MD} overflow-y-auto`}
+          bodyClassName={BODY_FILL}
         >
           <EmotionChart />
         </ChartCard>
@@ -59,6 +55,7 @@ export function SentimentTab() {
           title="Advanced Emotion Breakdown"
           icon={Brain}
           accent="purple"
+          className={CARD_FILL}
           tooltip={{
             description:
               'Provides detailed categorization of emotions into broader psychological categories including positive, negative, anxiety, affection, and neutral states with intensity analysis.',
@@ -67,17 +64,18 @@ export function SentimentTab() {
             example:
               'Positive: 45% (high intensity), Negative: 25% (moderate), Anxiety: 15% (low), Affection: 10% (high), Neutral: 5% showing strong positive communication with some underlying concerns.',
           }}
-          bodyClassName={`${CHART_MD} overflow-y-auto`}
+          bodyClassName={BODY_FILL}
         >
           <AdvancedEmotionChart />
         </ChartCard>
       </div>
 
-      <div className={`grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 ${GRID_GAP}`}>
+      <div className={CARD_GRID_ROW('grid-cols-1 lg:grid-cols-2 xl:grid-cols-3')}>
         <ChartCard
           title="Sentiment Trends Over Time"
           icon={TrendingUp}
           accent="blue"
+          className={CARD_FILL}
           tooltip={{
             description:
               'Tracks how sentiment patterns change over time, showing daily sentiment averages and identifying periods of positive or negative emotional communication.',
@@ -86,7 +84,7 @@ export function SentimentTab() {
             example:
               'Timeline might show increased positivity during holidays, sentiment dips during stressful periods, or gradual improvement in group dynamics over months.',
           }}
-          bodyClassName={`${CHART_LG} overflow-y-auto`}
+          bodyClassName={BODY_FILL}
         >
           <SentimentTimelineChart />
         </ChartCard>
@@ -95,6 +93,7 @@ export function SentimentTab() {
           title="Mood Correlation Analysis"
           icon={Users}
           accent="teal"
+          className={CARD_FILL}
           tooltip={{
             description:
               "Analyzes correlations between different participants' moods and emotional states, identifying who influences group sentiment and how emotions spread through conversations.",
@@ -103,7 +102,7 @@ export function SentimentTab() {
             example:
               'Strong correlation (0.75) between Alice and Bob suggests their moods align, while negative correlation (-0.45) indicates contrasting emotional responses to similar events.',
           }}
-          bodyClassName={`${CHART_LG} overflow-y-auto`}
+          bodyClassName={BODY_FILL}
         >
           <MoodCorrelationChart />
         </ChartCard>
@@ -112,6 +111,7 @@ export function SentimentTab() {
           title="Emotional Peaks & Valleys"
           icon={Zap}
           accent="orange"
+          className={CARD_FILL}
           tooltip={{
             description:
               'Identifies the most emotionally intense moments in conversations, highlighting peak positive and negative sentiment periods with context about what triggered these emotional extremes.',
@@ -120,7 +120,7 @@ export function SentimentTab() {
             example:
               'Highest peak on Dec 25th (0.95 sentiment) during holiday celebrations, lowest valley on March 15th (-0.78 sentiment) during stressful work period, providing insights into emotional triggers.',
           }}
-          bodyClassName={`${CHART_LG} overflow-y-auto`}
+          bodyClassName={BODY_FILL}
         >
           <EmotionalPeaksChart />
         </ChartCard>

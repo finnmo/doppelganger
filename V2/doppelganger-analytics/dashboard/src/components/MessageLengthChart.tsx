@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { useConversationFilter } from '@/contexts/ConversationContext';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell } from 'recharts';
+import { ChartTooltip } from '@/components/ui/ChartTooltip';
+import { useParticipantScope } from '@/hooks/useParticipantScope';
 
 interface MessageLengthDistribution {
   conversation_id: string;
@@ -28,20 +29,14 @@ export function MessageLengthChart() {
   const [totalMessages, setTotalMessages] = useState(0);
   const [averageLength, setAverageLength] = useState(0);
   const [loading, setLoading] = useState(true);
-  const { selectedConversations, isFiltered } = useConversationFilter();
+  const { filterScopedRows, scopeConversationIds } = useParticipantScope();
 
   useEffect(() => {
     const loadData = async () => {
       try {
         const response = await fetch('/data/messageLengthDistribution.json');
         let lengthData: MessageLengthDistribution[] = await response.json();
-        
-        // Filter by selected conversations if filtering is active
-        if (isFiltered && selectedConversations.length > 0) {
-          lengthData = lengthData.filter(item => 
-            selectedConversations.includes(item.conversation_id)
-          );
-        }
+        lengthData = filterScopedRows(lengthData);
         
         // Aggregate by bucket across filtered conversations
         const bucketMap = new Map<string, {
@@ -106,7 +101,7 @@ export function MessageLengthChart() {
     };
 
     loadData();
-  }, [selectedConversations, isFiltered]);
+  }, [filterScopedRows, scopeConversationIds]);
 
   if (loading) {
     return <div className="flex items-center justify-center h-64">Loading...</div>;
@@ -156,12 +151,6 @@ export function MessageLengthChart() {
         </div>
       </div>
       
-      {isFiltered && (
-        <div className="mb-2 text-center text-xs text-blue-600">
-          Filtered across {selectedConversations.length} selected conversation{selectedConversations.length !== 1 ? 's' : ''}
-        </div>
-      )}
-      
       <div className="min-h-0 flex-1">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart 
@@ -184,7 +173,7 @@ export function MessageLengthChart() {
                 return value.toString();
               }}
             />
-            <Tooltip 
+            <ChartTooltip 
               content={({ active, payload }) => {
                 if (active && payload && payload.length) {
                   return (

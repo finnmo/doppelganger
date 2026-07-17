@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { ChartTooltip } from '@/components/ui/ChartTooltip';
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { FileText, Image as ImageIcon, Link, Smile, Hash, MessageSquare, Phone, Settings } from 'lucide-react';
-import { useConversationFilter } from '@/contexts/ConversationContext';
+import { useParticipantScope } from '@/hooks/useParticipantScope';
 
 interface ContentType {
   conversation_id: string;
@@ -13,6 +14,11 @@ interface ContentType {
   examples: string[];
   avgLength: number;
   uniqueSenders: number;
+  representativeExample?: {
+    text: string;
+    sender: string;
+    conversation_id: string;
+  };
 }
 
 interface AggregatedContentType {
@@ -22,6 +28,11 @@ interface AggregatedContentType {
   examples: string[];
   avgLength: number;
   uniqueSenders: number;
+  representativeExample?: {
+    text: string;
+    sender: string;
+    conversation_id: string;
+  };
 }
 
 interface ContentTypeData {
@@ -34,38 +45,32 @@ interface ContentTypeData {
   contentTypes: ContentType[];
 }
 
-const ContentTypeChart: React.FC = () => {
+interface ContentTypeChartProps {
+  /** Pie + legend in card; full breakdown table for fullscreen. */
+  variant?: 'pie' | 'table';
+}
+
+const ContentTypeChart: React.FC<ContentTypeChartProps> = ({ variant = 'pie' }) => {
   const [data, setData] = useState<ContentTypeData | null>(null);
   const [loading, setLoading] = useState(true);
   const [hoveredType, setHoveredType] = useState<string | null>(null);
-  const { selectedConversations, isFiltered } = useConversationFilter();
+  const { filterScopedRows, scopeConversationIds } = useParticipantScope();
 
   useEffect(() => {
     const loadData = async () => {
       try {
         const response = await fetch('/data/contentTypeMetrics.json');
-        const contentData: ContentTypeData = await response.json();
-        
-        // Filter by selected conversations if filtering is active
-        if (isFiltered && selectedConversations.length > 0) {
-          contentData.contentTypes = contentData.contentTypes.filter(item => 
-            selectedConversations.includes(item.conversation_id)
-          );
-          
-          // Recalculate summary for filtered data
-          const filteredMessages = contentData.contentTypes.reduce((sum, item) => sum + item.count, 0);
-          const filteredTypes = new Set(contentData.contentTypes.map(item => item.type)).size;
-          const avgLength = contentData.contentTypes.length > 0 
-            ? contentData.contentTypes.reduce((sum, item) => sum + (item.avgLength * item.count), 0) / filteredMessages
-            : 0;
-          
-          contentData.summary = {
-            totalMessages: filteredMessages,
-            totalTypes: filteredTypes,
-            avgMessageLength: Math.round(avgLength),
-            totalConversations: new Set(contentData.contentTypes.map(item => item.conversation_id)).size
-          };
-        }
+        let contentData: ContentTypeData = await response.json();
+        contentData = {
+          ...contentData,
+          contentTypes: filterScopedRows(contentData.contentTypes),
+        };
+        const filteredMessages = contentData.contentTypes.reduce((sum, item) => sum + item.count, 0);
+        contentData.summary = {
+          ...contentData.summary,
+          totalMessages: filteredMessages,
+          totalConversations: new Set(contentData.contentTypes.map(i => i.conversation_id)).size,
+        };
         
         setData(contentData);
       } catch (error) {
@@ -76,7 +81,7 @@ const ContentTypeChart: React.FC = () => {
     };
 
     loadData();
-  }, [selectedConversations, isFiltered]);
+  }, [filterScopedRows, scopeConversationIds]);
 
   // Aggregate content types across conversations for display
   const aggregatedData = React.useMemo(() => {
@@ -87,6 +92,7 @@ const ContentTypeChart: React.FC = () => {
       totalLength: number;
       examples: Set<string>;
       senders: Set<number>;
+      representativeExample?: { text: string; sender: string; conversation_id: string };
     }>();
 
     data.contentTypes.forEach(item => {
@@ -104,6 +110,9 @@ const ContentTypeChart: React.FC = () => {
       typeData.totalLength += item.avgLength * item.count;
       item.examples.forEach(ex => typeData.examples.add(ex));
       typeData.senders.add(item.uniqueSenders);
+      if (!typeData.representativeExample && item.representativeExample) {
+        typeData.representativeExample = item.representativeExample;
+      }
     });
 
     const totalMessages = data.summary.totalMessages;
@@ -114,7 +123,8 @@ const ContentTypeChart: React.FC = () => {
       percentage: (typeData.count / totalMessages) * 100,
       examples: Array.from(typeData.examples).slice(0, 3),
       avgLength: Math.round(typeData.totalLength / typeData.count),
-      uniqueSenders: Math.max(...Array.from(typeData.senders))
+      uniqueSenders: Math.max(...Array.from(typeData.senders)),
+      representativeExample: typeData.representativeExample,
     })).sort((a, b) => b.count - a.count);
   }, [data]);
 
@@ -176,7 +186,7 @@ const ContentTypeChart: React.FC = () => {
     return colors[index % colors.length];
   };
 
-  const CustomTooltip = ({ active, payload }: {
+  const Custom = ({ active, payload }: {
     active?: boolean;
     payload?: Array<{ payload: AggregatedContentType }>;
   }) => {
@@ -194,7 +204,11 @@ const ContentTypeChart: React.FC = () => {
             <p><strong>Percentage:</strong> {data.percentage.toFixed(1)}%</p>
             <p><strong>Avg Length:</strong> {data.avgLength} chars</p>
             <p><strong>Unique Senders:</strong> {data.uniqueSenders}</p>
-            {data.examples && data.examples.length > 0 && (
+            {data.representativeExample ? (
+              <p className="text-gray-600 italic">
+                e.g. &ldquo;{data.representativeExample.text}&rdquo; — {data.representativeExample.sender}
+              </p>
+            ) : data.examples && data.examples.length > 0 ? (
               <div>
                 <p className="font-medium mt-2">Examples:</p>
                 <div className="max-w-xs">
@@ -205,7 +219,7 @@ const ContentTypeChart: React.FC = () => {
                   ))}
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
         </div>
       );
@@ -235,6 +249,57 @@ const ContentTypeChart: React.FC = () => {
     label: getTypeLabel(type.type)
   }));
 
+  if (variant === 'table') {
+    return (
+      <div className="flex h-full min-h-0 flex-col gap-3">
+        <div className="grid shrink-0 grid-cols-1 gap-3 text-sm text-gray-600 sm:grid-cols-3 sm:gap-4">
+          <div>
+            <span className="font-medium text-gray-900">{data.summary.totalMessages.toLocaleString()}</span>
+            <br />Total Messages
+          </div>
+          <div>
+            <span className="font-medium text-gray-900">{data.summary.totalTypes}</span>
+            <br />Content Types
+          </div>
+          <div>
+            <span className="font-medium text-gray-900">{data.summary.avgMessageLength}</span>
+            <br />Avg Length (chars)
+          </div>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-white text-left text-xs text-gray-500">
+              <tr>
+                <th className="pb-2 pr-2">Type</th>
+                <th className="pb-2 pr-2 text-right">Count</th>
+                <th className="pb-2 pr-2 text-right">%</th>
+                <th className="pb-2 pr-2 text-right">Avg Len</th>
+                <th className="pb-2 text-right">Senders</th>
+              </tr>
+            </thead>
+            <tbody>
+              {chartData.map((type) => (
+                <tr key={type.type} className="border-t border-gray-100 hover:bg-gray-50">
+                  <td className="py-2 pr-2">
+                    <div className="flex items-center gap-2">
+                      <div className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: type.color }} />
+                      {getTypeIcon(type.type)}
+                      <span className="font-medium">{type.label}</span>
+                    </div>
+                  </td>
+                  <td className="py-2 pr-2 text-right">{type.count.toLocaleString()}</td>
+                  <td className="py-2 pr-2 text-right">{type.percentage.toFixed(1)}%</td>
+                  <td className="py-2 pr-2 text-right">{type.avgLength}</td>
+                  <td className="py-2 text-right">{type.uniqueSenders}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full flex flex-col">
       <div className="mb-3 flex-shrink-0">
@@ -252,16 +317,11 @@ const ContentTypeChart: React.FC = () => {
             <br />Avg Length (chars)
           </div>
         </div>
-        {isFiltered && (
-          <div className="mt-2 text-xs text-blue-600">
-            Showing data for {data.summary.totalConversations} selected conversation{data.summary.totalConversations !== 1 ? 's' : ''}
-          </div>
-        )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1 min-h-0">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Chart */}
-        <div className="relative min-h-0">
+        <div className="relative min-h-0 h-full">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
@@ -282,8 +342,8 @@ const ContentTypeChart: React.FC = () => {
                   />
                 ))}
               </Pie>
-              <Tooltip 
-                content={<CustomTooltip />}
+              <ChartTooltip 
+                content={<Custom />}
                 offset={10}
                 allowEscapeViewBox={{ x: true, y: true }}
                 wrapperStyle={{ zIndex: 1000 }}
@@ -329,4 +389,8 @@ const ContentTypeChart: React.FC = () => {
   );
 };
 
-export default ContentTypeChart; 
+export function ContentTypeFullscreen() {
+  return <ContentTypeChart variant="table" />;
+}
+
+export default ContentTypeChart;

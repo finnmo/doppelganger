@@ -5,6 +5,7 @@ import { ArrowLeft, Users } from 'lucide-react';
 import { ThemeSelector } from '@/components/ThemeSelector';
 import { ApiKeySettingsButton } from '@/components/ApiKeySettings';
 import { PrivacySettingsButton } from '@/components/PrivacySettings';
+import { PersonaChatButton } from '@/components/PersonaChatButton';
 import { DataFreshnessBanner } from '@/components/DataFreshnessBanner';
 import { TabNavigation } from '@/components/TabNavigation';
 import { OverviewTab } from '@/components/tabs/OverviewTab';
@@ -13,7 +14,6 @@ import { SentimentTab } from '@/components/tabs/SentimentTab';
 import { MediaTab } from '@/components/tabs/MediaTab';
 import { ActivityTab } from '@/components/tabs/ActivityTab';
 import { ConversationsTab } from '@/components/tabs/ConversationsTab';
-import { PersonaTab } from '@/components/tabs/PersonaTab';
 import { PlatformBadge } from '@/components/PlatformBadge';
 import { useConversationFilter } from '@/contexts/ConversationContext';
 import { parseConversationId } from '@/lib/platforms';
@@ -33,8 +33,6 @@ export function ConversationDashboard({ conversationId, onBack }: ConversationDa
     switch (activeTab) {
       case 'overview':
         return <OverviewTab />;
-      case 'persona':
-        return <PersonaTab />;
       case 'messages':
         return <MessagesTab />;
       case 'sentiment':
@@ -108,6 +106,7 @@ export function ConversationDashboard({ conversationId, onBack }: ConversationDa
             </div>
 
             <div className={`${TOOLBAR_ROW} shrink-0`}>
+              <PersonaChatButton />
               <PrivacySettingsButton />
               <ApiKeySettingsButton />
               <ThemeSelector />

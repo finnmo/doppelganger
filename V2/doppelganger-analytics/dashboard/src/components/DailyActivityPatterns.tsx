@@ -1,8 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useConversationFilter } from '@/contexts/ConversationContext';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Cell } from 'recharts';
+import React, { useState, useEffect, useRef } from 'react';
+import { ChartTooltip } from '@/components/ui/ChartTooltip';
+import { ChartPlotContext } from '@/components/ui/chartPlotContext';
+import { useParticipantScope } from '@/hooks/useParticipantScope';
+import { CHART_AREA } from '@/lib/layout';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LineChart, Line, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Cell } from 'recharts';
 import { Calendar, Clock, TrendingUp, Activity, Sun, Moon, Coffee, Sunset } from 'lucide-react';
 
 interface ActiveHoursRow {
@@ -75,12 +78,13 @@ function getPeriod(hour: number): 'morning' | 'afternoon' | 'evening' | 'night' 
 }
 
 export function DailyActivityPatterns() {
+  const plotRef = useRef<HTMLDivElement>(null);
   const [dayData, setDayData] = useState<ProcessedDayData[]>([]);
   const [hourData, setHourData] = useState<ProcessedHourData[]>([]);
   const [summary, setSummary] = useState<ActivitySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'days' | 'hours' | 'radar'>('days');
-  const { selectedConversations, isFiltered } = useConversationFilter();
+  const { filterScopedRows, scopeConversationIds } = useParticipantScope();
 
   useEffect(() => {
     const loadData = async () => {
@@ -88,13 +92,10 @@ export function DailyActivityPatterns() {
         setLoading(true);
         const response = await fetch('/data/activeHours.json');
         let rows: ActiveHoursRow[] = await response.json();
+        rows = filterScopedRows(rows, { senderKey: 'sender' });
 
         if (!Array.isArray(rows)) {
           rows = [];
-        }
-
-        if (isFiltered && selectedConversations.length > 0) {
-          rows = rows.filter((row) => selectedConversations.includes(row.conversation_id));
         }
 
         const dayMap = new Map<string, { totalMessages: number; hourCounts: Map<number, number> }>();
@@ -200,7 +201,7 @@ export function DailyActivityPatterns() {
     };
 
     loadData();
-  }, [selectedConversations, isFiltered]);
+  }, [filterScopedRows, scopeConversationIds]);
 
   if (loading) {
     return (
@@ -244,7 +245,7 @@ export function DailyActivityPatterns() {
     }
   };
 
-  const formatTooltip = (value: number, data: Partial<ProcessedDayData> & Partial<ProcessedHourData>) => {
+  const format = (value: number, data: Partial<ProcessedDayData> & Partial<ProcessedHourData>) => {
     return [
       <div key="tooltip" className="text-sm">
         <div className="font-semibold">{data.day || data.timeLabel}</div>
@@ -268,8 +269,8 @@ export function DailyActivityPatterns() {
     !summary.dayDataAvailable && (viewMode === 'days' || viewMode === 'radar') ? 'hours' : viewMode;
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-sm border">
-      <div className="flex items-center justify-between mb-6">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border bg-white p-4 shadow-sm sm:p-6">
+      <div className="mb-4 flex shrink-0 items-center justify-between sm:mb-6">
         <div className="flex items-center space-x-2">
           <Calendar className="w-5 h-5 text-blue-600" />
           <h3 className="text-lg font-semibold">Daily Activity Patterns</h3>
@@ -308,7 +309,7 @@ export function DailyActivityPatterns() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+      <div className="mb-4 grid shrink-0 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 sm:mb-6">
         <div className="bg-blue-50 p-4 rounded-lg">
           <div className="flex items-center space-x-2">
             <TrendingUp className="w-4 h-4 text-blue-600" />
@@ -350,18 +351,19 @@ export function DailyActivityPatterns() {
         </div>
       </div>
 
-      <div className="h-80">
+      <ChartPlotContext.Provider value={plotRef}>
+      <div ref={plotRef} className={CHART_AREA}>
         {effectiveViewMode === 'days' && (
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={dayData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="day" />
               <YAxis />
-              <Tooltip content={({ active, payload }) => {
+              <ChartTooltip content={({ active, payload }) => {
                 if (active && payload && payload.length) {
                   return (
                     <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
-                      {formatTooltip(Number(payload[0].value), payload[0].payload)}
+                      {format(Number(payload[0].value), payload[0].payload)}
                     </div>
                   );
                 }
@@ -382,11 +384,11 @@ export function DailyActivityPatterns() {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="timeLabel" interval={2} />
               <YAxis />
-              <Tooltip content={({ active, payload }) => {
+              <ChartTooltip content={({ active, payload }) => {
                 if (active && payload && payload.length) {
                   return (
                     <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
-                      {formatTooltip(Number(payload[0].value), payload[0].payload)}
+                      {format(Number(payload[0].value), payload[0].payload)}
                     </div>
                   );
                 }
@@ -417,11 +419,12 @@ export function DailyActivityPatterns() {
                 fillOpacity={0.3}
                 strokeWidth={2}
               />
-              <Tooltip />
+              <ChartTooltip />
             </RadarChart>
           </ResponsiveContainer>
         )}
       </div>
+      </ChartPlotContext.Provider>
 
       <div className="mt-6 bg-gray-50 p-4 rounded-lg">
         <h4 className="text-sm font-semibold text-gray-700 mb-2">Activity Insights</h4>

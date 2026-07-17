@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useConversationFilter } from '@/contexts/ConversationContext';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { useParticipantScope } from '@/hooks/useParticipantScope';
+import { isKnownParticipant } from '@/lib/participantFilter';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell } from 'recharts';
+import { ChartTooltip } from '@/components/ui/ChartTooltip';
 import type { Payload, ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent';
 import { GitBranch, MessageSquare, Users, TrendingUp } from 'lucide-react';
 
@@ -60,7 +62,7 @@ export function ThreadVisualization() {
   const [data, setData] = useState<ThreadMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'distribution' | 'starters'>('distribution');
-  const { selectedConversations, isFiltered } = useConversationFilter();
+  const { scopeConversationIds, participantIndex, isFiltered } = useParticipantScope();
 
   useEffect(() => {
     const loadData = async () => {
@@ -68,73 +70,76 @@ export function ThreadVisualization() {
         const response = await fetch('/data/threadAnalysis.json');
         const threadData: ThreadMetrics = await response.json();
         
-        // Filter by selected conversations if filtering is active
-        if (isFiltered && selectedConversations.length > 0) {
-          threadData.conversation_threads = threadData.conversation_threads.filter(thread =>
-            selectedConversations.includes(thread.conversation_id)
-          );
+        const scopeSet = new Set(scopeConversationIds);
+        threadData.conversation_threads = threadData.conversation_threads
+          .filter((thread) => scopeSet.has(thread.conversation_id))
+          .map((thread) => ({
+            ...thread,
+            thread_starters: (thread.thread_starters || []).filter((starter) =>
+              isKnownParticipant(participantIndex, thread.conversation_id, starter.sender)
+            ),
+          }));
 
-          const filteredThreads = threadData.conversation_threads;
-          const totalThreads = filteredThreads.reduce((sum, conv) => sum + conv.thread_count, 0);
-          const avgDepth = filteredThreads.length > 0
-            ? filteredThreads.reduce((sum, conv) => sum + conv.avg_thread_length, 0) / filteredThreads.length
-            : 0;
-          const maxDepth = Math.max(...filteredThreads.map(conv => conv.max_thread_depth), 0);
+        const filteredThreads = threadData.conversation_threads;
+        const totalThreads = filteredThreads.reduce((sum, conv) => sum + conv.thread_count, 0);
+        const avgDepth = filteredThreads.length > 0
+          ? filteredThreads.reduce((sum, conv) => sum + conv.avg_thread_length, 0) / filteredThreads.length
+          : 0;
+        const maxDepth = Math.max(...filteredThreads.map(conv => conv.max_thread_depth), 0);
 
-          threadData.summary = {
-            total_threads: totalThreads,
-            avg_depth: Math.round(avgDepth * 10) / 10,
-            max_depth: maxDepth,
-            total_conversations: filteredThreads.length,
-            threaded_conversations: filteredThreads.filter(conv => conv.thread_count > 0).length
-          };
+        threadData.summary = {
+          total_threads: totalThreads,
+          avg_depth: Math.round(avgDepth * 10) / 10,
+          max_depth: maxDepth,
+          total_conversations: filteredThreads.length,
+          threaded_conversations: filteredThreads.filter(conv => conv.thread_count > 0).length
+        };
 
-          // Merge real depth_distribution arrays only — never invent histogram bars
-          const depthCounts = new Map<number, number>();
-          let distributionsFound = 0;
-          filteredThreads.forEach(conv => {
-            if (!conv.depth_distribution || conv.depth_distribution.length === 0) return;
-            distributionsFound++;
-            conv.depth_distribution.forEach(entry => {
-              depthCounts.set(entry.depth, (depthCounts.get(entry.depth) || 0) + entry.count);
-            });
+        // Merge real depth_distribution arrays only — never invent histogram bars
+        const depthCounts = new Map<number, number>();
+        let distributionsFound = 0;
+        filteredThreads.forEach(conv => {
+          if (!conv.depth_distribution || conv.depth_distribution.length === 0) return;
+          distributionsFound++;
+          conv.depth_distribution.forEach(entry => {
+            depthCounts.set(entry.depth, (depthCounts.get(entry.depth) || 0) + entry.count);
           });
+        });
 
-          if (distributionsFound === 0) {
-            threadData.depth_distribution = [];
-          } else {
-            const totalDepthEntries = Array.from(depthCounts.values()).reduce((a, b) => a + b, 0);
-            threadData.depth_distribution = Array.from(depthCounts.entries()).map(([depth, count]) => ({
-              depth,
-              count,
-              percentage: totalDepthEntries > 0 ? (count / totalDepthEntries) * 100 : 0
-            })).sort((a, b) => a.depth - b.depth);
-          }
-
-          // Rebuild top_thread_starters from filtered conversations
-          const starterMap = new Map<string, { threads_started: number; depthSum: number; depthCount: number }>();
-          filteredThreads.forEach(conv => {
-            (conv.thread_starters || []).forEach(starter => {
-              if (!starterMap.has(starter.sender)) {
-                starterMap.set(starter.sender, { threads_started: 0, depthSum: 0, depthCount: 0 });
-              }
-              const stats = starterMap.get(starter.sender)!;
-              stats.threads_started += starter.threads_started;
-              if (typeof starter.avg_thread_depth === 'number') {
-                stats.depthSum += starter.avg_thread_depth;
-                stats.depthCount++;
-              }
-            });
-          });
-
-          threadData.top_thread_starters = Array.from(starterMap.entries())
-            .map(([sender, stats]) => ({
-              sender,
-              threads_started: stats.threads_started,
-              avg_thread_depth: stats.depthCount > 0 ? stats.depthSum / stats.depthCount : 0
-            }))
-            .sort((a, b) => b.threads_started - a.threads_started);
+        if (distributionsFound === 0) {
+          threadData.depth_distribution = [];
+        } else {
+          const totalDepthEntries = Array.from(depthCounts.values()).reduce((a, b) => a + b, 0);
+          threadData.depth_distribution = Array.from(depthCounts.entries()).map(([depth, count]) => ({
+            depth,
+            count,
+            percentage: totalDepthEntries > 0 ? (count / totalDepthEntries) * 100 : 0
+          })).sort((a, b) => a.depth - b.depth);
         }
+
+        // Rebuild top_thread_starters from filtered conversations
+        const starterMap = new Map<string, { threads_started: number; depthSum: number; depthCount: number }>();
+        filteredThreads.forEach(conv => {
+          (conv.thread_starters || []).forEach(starter => {
+            if (!starterMap.has(starter.sender)) {
+              starterMap.set(starter.sender, { threads_started: 0, depthSum: 0, depthCount: 0 });
+            }
+            const stats = starterMap.get(starter.sender)!;
+            stats.threads_started += starter.threads_started;
+            if (typeof starter.avg_thread_depth === 'number') {
+              stats.depthSum += starter.avg_thread_depth;
+              stats.depthCount++;
+            }
+          });
+        });
+
+        threadData.top_thread_starters = Array.from(starterMap.entries())
+          .map(([sender, stats]) => ({
+            sender,
+            threads_started: stats.threads_started,
+            avg_thread_depth: stats.depthCount > 0 ? stats.depthSum / stats.depthCount : 0
+          }))
+          .sort((a, b) => b.threads_started - a.threads_started);
         
         setData(threadData);
       } catch (error) {
@@ -158,7 +163,7 @@ export function ThreadVisualization() {
     };
 
     loadData();
-  }, [selectedConversations, isFiltered]);
+  }, [scopeConversationIds, participantIndex]);
 
   if (loading) {
     return (
@@ -290,7 +295,7 @@ export function ThreadVisualization() {
                 tickFormatter={(value) => value.toLocaleString()}
                 label={{ value: 'Number of Threads', angle: -90, position: 'insideLeft' }}
               />
-              <Tooltip 
+              <ChartTooltip 
                 content={({ active, payload }) => {
                   if (active && payload && payload.length) {
                     return (
@@ -325,7 +330,7 @@ export function ThreadVisualization() {
                 fontSize={12}
                 tickFormatter={(value) => value.toLocaleString()}
               />
-              <Tooltip 
+              <ChartTooltip 
                 content={({ active, payload }) => {
                   if (active && payload && payload.length) {
                     return (

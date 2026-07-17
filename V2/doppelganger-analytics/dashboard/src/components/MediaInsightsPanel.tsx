@@ -1,9 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Camera, FileImage, ThumbsUp } from 'lucide-react';
 import { useDashData } from '@/hooks/useDashData';
-import { useConversationFilter } from '@/contexts/ConversationContext';
+import { useParticipantScope } from '@/hooks/useParticipantScope';
 
 interface MediaMetrics {
   conversation_metrics: Array<{
@@ -35,14 +35,24 @@ function pct(part: number, whole: number): number {
 export function MediaInsightsPanel() {
   const { data: media } = useDashData<MediaMetrics>('mediaMetrics.json');
   const { data: reactions } = useDashData<ReactionMetrics>('reactionMetrics.json');
-  const { selectedConversations } = useConversationFilter();
+  const { filterScopedRows } = useParticipantScope();
 
-  const selected = new Set(selectedConversations);
+  const scopedConvMetrics = useMemo(
+    () => filterScopedRows(media?.conversation_metrics || []),
+    [media, filterScopedRows]
+  );
+  const scopedSenderMedia = useMemo(
+    () => filterScopedRows(media?.sender_media_data || [], { senderKey: 'sender' }),
+    [media, filterScopedRows]
+  );
+  const scopedReactions = useMemo(
+    () => filterScopedRows(reactions?.reactionsByConversation || []),
+    [reactions, filterScopedRows]
+  );
 
   // Media totals for the selected conversation(s)
   let photos = 0, videos = 0, attachments = 0, totalMessages = 0;
-  for (const conv of media?.conversation_metrics || []) {
-    if (!selected.has(conv.conversation_id)) continue;
+  for (const conv of scopedConvMetrics) {
     photos += conv.photo_count;
     videos += conv.video_count;
     attachments += conv.attachment_count;
@@ -50,10 +60,9 @@ export function MediaInsightsPanel() {
   }
   const totalMedia = photos + videos + attachments;
 
-  // Top media sharer within the selection
+  // Top media sharer within the selection (participants only)
   const sharerTotals = new Map<string, number>();
-  for (const row of media?.sender_media_data || []) {
-    if (!selected.has(row.conversation_id)) continue;
+  for (const row of scopedSenderMedia) {
     sharerTotals.set(row.sender, (sharerTotals.get(row.sender) || 0) + row.total_media);
   }
   const topSharer = [...sharerTotals.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
@@ -68,10 +77,8 @@ export function MediaInsightsPanel() {
         ? 'Videos'
         : 'Files';
 
-  // Real per-conversation reaction totals for the selection
-  const convReactions = (reactions?.reactionsByConversation || []).filter(r => selected.has(r.conversation_id));
-  const totalReactions = convReactions.reduce((sum, r) => sum + r.count, 0);
-  const topEmoji = convReactions.slice().sort((a, b) => b.count - a.count)[0]?.top_emoji || '—';
+  const totalReactions = scopedReactions.reduce((sum, r) => sum + r.count, 0);
+  const topEmoji = scopedReactions.slice().sort((a, b) => b.count - a.count)[0]?.top_emoji || '—';
   const reactionRate = totalMessages > 0 ? (totalReactions / totalMessages) * 100 : 0;
 
   const ready = !!media;

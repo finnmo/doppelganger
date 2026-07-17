@@ -35,21 +35,39 @@ describe('computePeaksFromActiveHours', () => {
 });
 
 describe('computeEmojiChampions', () => {
+  const convs = [
+    { conversation_id: 'c1', participants: ['A', 'B'] },
+    { conversation_id: 'c2', participants: ['C'] },
+  ];
+
   test('aggregates only selected conversations', () => {
-    const champions = computeEmojiChampions(emoji, ['c1']);
+    const champions = computeEmojiChampions(emoji, ['c1'], convs);
     expect(champions).toEqual([
       { sender: 'A', count: 120 },
       { sender: 'B', count: 40 }
     ]);
   });
 
-  test('sums a sender across selected conversations', () => {
+  test('sums a sender across selected conversations when they are participants', () => {
+    const convsWithAInC2 = [
+      { conversation_id: 'c1', participants: ['A', 'B'] },
+      { conversation_id: 'c2', participants: ['A', 'C'] },
+    ];
     const champions = computeEmojiChampions(
       [...emoji, { conversation_id: 'c2', sender: 'A', emoji_count: 5 }],
-      ['c1', 'c2']
+      ['c1', 'c2'],
+      convsWithAInC2
     );
     expect(champions[0]).toEqual({ sender: 'C', count: 999 });
     expect(champions.find(c => c.sender === 'A')).toEqual({ sender: 'A', count: 125 });
+  });
+
+  test('drops emoji rows from non-participant senders', () => {
+    const rows = [
+      { conversation_id: 'c1', sender: 'A', emoji_count: 10 },
+      { conversation_id: 'c1', sender: 'Intruder', emoji_count: 999 },
+    ];
+    expect(computeEmojiChampions(rows, ['c1'], convs)).toEqual([{ sender: 'A', count: 10 }]);
   });
 });
 

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useConversationFilter } from '@/contexts/ConversationContext';
+import { useParticipantScope } from '@/hooks/useParticipantScope';
 import {
   aggregateReactionsForConversations,
   type ConversationReactionRow
@@ -58,29 +58,24 @@ interface ReactionData {
 export function ReactionSummaryCards() {
   const [data, setData] = useState<ReactionData | null>(null);
   const [loading, setLoading] = useState(true);
-  const { selectedConversations, isFiltered } = useConversationFilter();
+  const { conversations, scopeConversationIds, participantIndex } = useParticipantScope();
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [reactionRes, conversationRes] = await Promise.all([
-          fetch('/data/reactionMetrics.json'),
-          fetch('/data/conversationMetrics.json')
-        ]);
+        const reactionRes = await fetch('/data/reactionMetrics.json');
         const reactionData: ReactionData = await reactionRes.json();
-        const conversationData: {
-          conversations: Array<{ conversation_id: string; total_messages: number }>;
-        } = await conversationRes.json();
 
-        if (isFiltered && selectedConversations.length > 0 && reactionData.reactionsByConversation) {
-          const messageCount = conversationData.conversations
-            .filter(c => selectedConversations.includes(c.conversation_id))
-            .reduce((sum, c) => sum + c.total_messages, 0);
+        if (reactionData.reactionsByConversation) {
+          const messageCount = conversations
+            .filter((c) => scopeConversationIds.includes(c.conversation_id))
+            .reduce((sum, c) => sum + (c.total_messages ?? 0), 0);
 
           const filtered = aggregateReactionsForConversations(
             reactionData.reactionsByConversation,
-            selectedConversations,
-            messageCount
+            scopeConversationIds,
+            messageCount,
+            participantIndex
           );
 
           setData({
@@ -103,7 +98,7 @@ export function ReactionSummaryCards() {
     };
 
     loadData();
-  }, [selectedConversations, isFiltered]);
+  }, [conversations, scopeConversationIds, participantIndex]);
 
   if (loading) {
     return (

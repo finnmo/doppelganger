@@ -4,6 +4,7 @@
 import fs from 'fs';
 import path from 'path';
 import { decodeInstagramUnicode } from '../../utils/unicodeDecoder.js';
+import { isSystemMessage } from '../../utils/messageFilters.js';
 import type { NormalizedAttachment, NormalizedConversation, NormalizedMessage } from '../types.js';
 
 export interface MetaRawMessage {
@@ -32,24 +33,6 @@ const META_MESSAGE_BUCKETS = [
   'message_requests'
 ] as const;
 
-const META_SYSTEM_MARKERS = [
-  'sent an attachment',
-  'sent a photo',
-  'sent a video',
-  'reacted to your message',
-  'reacted to a message',
-  'liked a message',
-  'started a call',
-  'ended the call',
-  'missed call',
-  'missed a call',
-  'changed the group photo',
-  'named the group',
-  'left the group',
-  'added',
-  'removed'
-];
-
 function isMessageFile(name: string): boolean {
   return name.startsWith('message_') && name.endsWith('.json');
 }
@@ -64,12 +47,6 @@ export function inferMetaSource(absoluteConvPath: string, rootDir: string): 'ins
   if (rootLower.includes('facebook')) return 'messenger';
   if (rootLower.includes('instagram')) return 'instagram';
   return 'instagram';
-}
-
-function isMetaSystemText(text: string | null): boolean {
-  if (!text) return false;
-  const lower = text.trim().toLowerCase();
-  return META_SYSTEM_MARKERS.some(marker => lower.includes(marker));
 }
 
 export function normalizeMetaMessage(msg: MetaRawMessage): NormalizedMessage {
@@ -99,6 +76,11 @@ export function normalizeMetaMessage(msg: MetaRawMessage): NormalizedMessage {
   }
 
   const text = msg.content ? decodeInstagramUnicode(msg.content) : null;
+  const hasOnlyAttachments =
+    !text &&
+    ((msg.photos?.length ?? 0) > 0 ||
+      (msg.videos?.length ?? 0) > 0 ||
+      (msg.audio_files?.length ?? 0) > 0);
 
   return {
     sender: decodeInstagramUnicode(msg.sender_name),
@@ -116,7 +98,7 @@ export function normalizeMetaMessage(msg: MetaRawMessage): NormalizedMessage {
           text: msg.share.share_text ? decodeInstagramUnicode(msg.share.share_text) : undefined
         }
       : undefined,
-    isSystem: isMetaSystemText(text) || msg.type === 'Call'
+    isSystem: (text != null && isSystemMessage(text)) || msg.type === 'Call' || hasOnlyAttachments
   };
 }
 

@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell } from 'recharts';
+import { ChartTooltip } from '@/components/ui/ChartTooltip';
 import type { ValueType, NameType } from 'recharts/types/component/DefaultTooltipContent';
-import { useConversationFilter } from '@/contexts/ConversationContext';
+import { useParticipantScope } from '@/hooks/useParticipantScope';
+import { CHART_AREA } from '@/lib/layout';
 import { AlertCircle, TrendingUp } from 'lucide-react';
 
 interface SentimentData {
@@ -27,7 +29,7 @@ export function SentimentChart() {
   const [data, setData] = useState<ProcessedSentimentData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { selectedConversations, isFiltered } = useConversationFilter();
+  const { filterScopedRows, isFiltered, scopeConversationIds } = useParticipantScope();
 
   useEffect(() => {
     const loadData = async () => {
@@ -45,13 +47,7 @@ export function SentimentChart() {
         if (!Array.isArray(sentimentData)) {
           throw new Error('Invalid sentiment data format');
         }
-        
-        // Filter by selected conversations if filtering is active
-        if (isFiltered && selectedConversations.length > 0) {
-          sentimentData = sentimentData.filter(item => 
-            selectedConversations.includes(item.conversation_id)
-          );
-        }
+        sentimentData = filterScopedRows(sentimentData, { senderKey: 'sender' });
         
         if (sentimentData.length === 0) {
           setData([]);
@@ -99,7 +95,7 @@ export function SentimentChart() {
     };
 
     loadData();
-  }, [selectedConversations, isFiltered]);
+  }, [filterScopedRows, scopeConversationIds]);
 
   if (loading) {
     return (
@@ -164,10 +160,10 @@ export function SentimentChart() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="flex h-full min-h-0 flex-col gap-3">
       {/* Summary Statistics */}
       {data.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4">
+        <div className="grid shrink-0 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <div className="bg-blue-50 p-3 rounded-lg">
             <div className="text-blue-800 font-medium">{data.length}</div>
             <div className="text-blue-600 text-sm">Participants</div>
@@ -193,7 +189,7 @@ export function SentimentChart() {
         </div>
       )}
 
-      <div className="h-64">
+      <div className={CHART_AREA}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -211,7 +207,7 @@ export function SentimentChart() {
               domain={[-1, 1]}
               tickFormatter={(value) => value.toFixed(1)}
             />
-            <Tooltip 
+            <ChartTooltip 
               formatter={formatTooltip}
               labelStyle={{ color: '#374151' }}
               contentStyle={{ 

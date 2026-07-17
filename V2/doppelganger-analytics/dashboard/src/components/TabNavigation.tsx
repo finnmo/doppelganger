@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { TrendingUp, MessageCircle, Heart, Image as ImageIcon, Clock, Users, Sparkles } from 'lucide-react';
+import { TrendingUp, MessageCircle, Heart, Image as ImageIcon, Clock, Users } from 'lucide-react';
 import { PAGE_SHELL } from '@/lib/layout';
 
 export interface Tab {
@@ -19,13 +19,6 @@ export const tabs: Tab[] = [
     shortLabel: 'Overview',
     icon: <TrendingUp className="w-4 h-4" />,
     description: 'High-level dashboard summary and KPIs',
-  },
-  {
-    id: 'persona',
-    label: 'Persona Chat',
-    shortLabel: 'Persona',
-    icon: <Sparkles className="w-4 h-4" />,
-    description: 'Chat with an AI simulation of someone from your messages',
   },
   {
     id: 'messages',

@@ -6,6 +6,7 @@ import { Users, MessageCircle, Clock, ArrowRight, EyeOff, Eye } from 'lucide-rea
 import { ThemeSelector } from '@/components/ThemeSelector';
 import { ApiKeySettingsButton } from '@/components/ApiKeySettings';
 import { PrivacySettingsButton } from '@/components/PrivacySettings';
+import { PersonaChatButton } from '@/components/PersonaChatButton';
 import { DataFreshnessBanner } from '@/components/DataFreshnessBanner';
 import { PlatformBadge } from '@/components/PlatformBadge';
 import { parseConversationId, platformStyles, sourceLabel } from '@/lib/platforms';
@@ -242,6 +243,7 @@ export function ConversationList({ onConversationSelect }: ConversationListProps
           </p>
         </div>
         <div className={`${TOOLBAR_ROW} shrink-0`}>
+          <PersonaChatButton />
           <PrivacySettingsButton />
           <ApiKeySettingsButton />
           <ThemeSelector />

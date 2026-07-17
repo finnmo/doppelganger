@@ -1,6 +1,12 @@
 // Pure aggregation for the Overview tab. Extracted from the component so it
 // can be unit-tested and reused without React. No DOM or fetch dependencies.
 
+import {
+  buildParticipantIndex,
+  filterRowsBySelection,
+  type ConversationParticipantRecord,
+} from './participantFilter';
+
 export interface ConversationRecord {
   conversation_id: string;
   participants: string[];
@@ -124,12 +130,21 @@ function resolveDay(row: ActiveHourRecord): string | null {
  * show an honest empty state rather than global peaks.
  */
 export function computePeaksFromActiveHours(
-  rows: ActiveHourRecord[]
+  rows: ActiveHourRecord[],
+  conversations: ConversationParticipantRecord[] = []
 ): { peak_hours: number[]; peak_days: string[] } {
+  const participantIndex = buildParticipantIndex(conversations);
+  const scoped =
+    conversations.length > 0
+      ? filterRowsBySelection(rows, [...participantIndex.keys()], participantIndex, {
+          senderKey: 'sender',
+        })
+      : rows;
+
   const hourTotals = new Map<number, number>();
   const dayTotals = new Map<string, number>();
 
-  for (const row of rows) {
+  for (const row of scoped) {
     const hour = typeof row.hour === 'number' ? row.hour : parseInt(String(row.hour), 10);
     if (!Number.isNaN(hour)) {
       hourTotals.set(hour, (hourTotals.get(hour) || 0) + row.count);
@@ -183,11 +198,19 @@ export function computeFilteredOverviewMetrics(
   const selected = new Set(selectedConversations);
 
   const filteredConversations = conversation.conversations.filter(conv => selected.has(conv.conversation_id));
+  const participantIndex = buildParticipantIndex(filteredConversations);
 
   const uniqueParticipants = new Set<string>();
   filteredConversations.forEach(conv => conv.participants.forEach(p => uniqueParticipants.add(p)));
 
-  const totalMessages = filteredConversations.reduce((sum, conv) => sum + conv.total_messages, 0);
+  const totalMessages = filteredConversations.reduce((sum, conv) => {
+    const bySender = conv.messages_by_sender ?? {};
+    const participantTotal = conv.participants.reduce(
+      (s, p) => s + (bySender[p] ?? 0),
+      0
+    );
+    return sum + (participantTotal > 0 ? participantTotal : conv.total_messages);
+  }, 0);
   const count = filteredConversations.length;
   const avg = (fn: (c: ConversationRecord) => number) =>
     count > 0 ? filteredConversations.reduce((sum, conv) => sum + fn(conv), 0) / count : 0;
@@ -223,9 +246,9 @@ export function computeFilteredOverviewMetrics(
   // Emoji totals from per-conversation data; 0 when the dataset is missing.
   // URL totals have no per-conversation source and stay 0 (never scaled from
   // global counts). Averages stay as corpus averages, honestly labeled.
-  const totalEmojis = (emoji ?? [])
-    .filter(row => selected.has(row.conversation_id))
-    .reduce((sum, row) => sum + row.emoji_count, 0);
+  const totalEmojis = filterRowsBySelection(emoji ?? [], selectedConversations, participantIndex, {
+    senderKey: 'sender',
+  }).reduce((sum, row) => sum + row.emoji_count, 0);
 
   const textMetrics = {
     totalMessages,
@@ -239,7 +262,8 @@ export function computeFilteredOverviewMetrics(
   // Peak hours/days recomputed from the selection's activeHours rows; empty
   // when that dataset is missing (never global peaks presented as filtered).
   const filteredPeaks = computePeaksFromActiveHours(
-    (activeHours ?? []).filter(row => selected.has(row.conversation_id))
+    (activeHours ?? []).filter(row => selected.has(row.conversation_id)),
+    filteredConversations
   );
 
   return {
@@ -262,12 +286,15 @@ export function computeFilteredOverviewMetrics(
 export function computeEmojiChampions(
   emoji: SenderEmojiRecord[],
   selectedConversations: string[],
+  conversations: ConversationParticipantRecord[] = [],
   limit = 5
 ): Array<{ sender: string; count: number }> {
-  const selected = new Set(selectedConversations);
+  const participantIndex = buildParticipantIndex(conversations);
+  const scoped = filterRowsBySelection(emoji, selectedConversations, participantIndex, {
+    senderKey: 'sender',
+  });
   const bySender = new Map<string, number>();
-  for (const row of emoji) {
-    if (!selected.has(row.conversation_id)) continue;
+  for (const row of scoped) {
     bySender.set(row.sender, (bySender.get(row.sender) || 0) + row.emoji_count);
   }
   return Array.from(bySender.entries())

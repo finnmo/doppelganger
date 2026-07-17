@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { useConversationFilter } from '@/contexts/ConversationContext';
+import { ChartTooltip } from '@/components/ui/ChartTooltip';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { useParticipantScope } from '@/hooks/useParticipantScope';
 
 interface MediaEngagementData {
   summary: {
@@ -75,7 +76,7 @@ export default function MediaEngagementChart() {
   const [loading, setLoading] = useState(true);
   const [filteredUnavailable, setFilteredUnavailable] = useState(false);
   const [activeView, setActiveView] = useState<'correlations' | 'senders' | 'timing'>('correlations');
-  const { selectedConversations, isFiltered } = useConversationFilter();
+  const { isFiltered, participantUnion } = useParticipantScope();
 
   useEffect(() => {
     const loadData = async () => {
@@ -83,15 +84,30 @@ export default function MediaEngagementChart() {
         const response = await fetch('/data/mediaEngagementMetrics.json');
         const mediaData: MediaEngagementData = await response.json();
 
-        // Media engagement has no conversation_id — cannot accurately filter
-        if (isFiltered && selectedConversations.length > 0) {
+        // Media engagement has no conversation_id � cannot accurately filter
+        if (isFiltered) {
           setFilteredUnavailable(true);
           setData(null);
           return;
         }
 
+        const allowed = participantUnion;
+        const scopedSenders = mediaData.senderEngagement.filter((row) => allowed.has(row.sender));
+        const scopedCorrelations = mediaData.mediaCorrelations.map((item) => ({
+          ...item,
+          topResponders: item.topResponders.filter((r) => allowed.has(r.sender)),
+        }));
+
         setFilteredUnavailable(false);
-        setData(mediaData);
+        setData({
+          ...mediaData,
+          summary: {
+            ...mediaData.summary,
+            totalSenders: scopedSenders.length,
+          },
+          mediaCorrelations: scopedCorrelations,
+          senderEngagement: scopedSenders,
+        });
       } catch (error) {
         console.error('Error loading media engagement data:', error);
         setData(null);
@@ -102,7 +118,7 @@ export default function MediaEngagementChart() {
     };
 
     loadData();
-  }, [selectedConversations, isFiltered]);
+  }, [isFiltered, participantUnion]);
 
   // Process correlation data for visualization
   const correlationData = useMemo(() => {
@@ -242,13 +258,13 @@ export default function MediaEngagementChart() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Media Type Engagement Rates */}
         <div className="bg-white rounded-lg border p-4">
-          <h4 className="text-lg font-semibold mb-4">📊 Engagement by Media Type</h4>
+          <h4 className="text-lg font-semibold mb-4">?? Engagement by Media Type</h4>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={correlationData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="type" />
               <YAxis />
-              <Tooltip 
+              <ChartTooltip 
                 formatter={(value, name) => [
                   name === 'engagement' ? `${Number(value).toFixed(1)}%` : Number(value).toFixed(2),
                   name === 'engagement' ? 'Engagement Rate' : 'Avg Responses'
@@ -261,13 +277,13 @@ export default function MediaEngagementChart() {
 
         {/* Response Time Distribution */}
         <div className="bg-white rounded-lg border p-4">
-          <h4 className="text-lg font-semibold mb-4">⏱️ Response Timing Distribution</h4>
+          <h4 className="text-lg font-semibold mb-4">?? Response Timing Distribution</h4>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={timingData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="timing" />
               <YAxis />
-              <Tooltip />
+              <ChartTooltip />
               <Bar dataKey="photo" stackId="a" fill={MEDIA_TYPE_COLORS.photo} />
               <Bar dataKey="video" stackId="a" fill={MEDIA_TYPE_COLORS.video} />
               <Bar dataKey="attachment" stackId="a" fill={MEDIA_TYPE_COLORS.attachment} />
@@ -282,7 +298,7 @@ export default function MediaEngagementChart() {
           <div key={item.mediaType} className="bg-white rounded-lg border p-4">
             <h5 className="text-lg font-semibold mb-3 flex items-center gap-2">
               <span style={{ color: MEDIA_TYPE_COLORS[item.mediaType] }}>
-                {item.mediaType === 'photo' ? '📸' : item.mediaType === 'video' ? '🎥' : '📎'}
+                {item.mediaType === 'photo' ? '??' : item.mediaType === 'video' ? '??' : '??'}
               </span>
               {item.mediaType.charAt(0).toUpperCase() + item.mediaType.slice(1)}s
             </h5>
@@ -324,13 +340,13 @@ export default function MediaEngagementChart() {
     <div className="space-y-6">
       {/* Top Senders Chart */}
       <div className="bg-white rounded-lg border p-4">
-        <h4 className="text-lg font-semibold mb-4">👥 Top Media Sharers by Engagement</h4>
+        <h4 className="text-lg font-semibold mb-4">?? Top Media Sharers by Engagement</h4>
         <ResponsiveContainer width="100%" height={400}>
           <BarChart data={senderData} layout="horizontal">
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis type="number" />
             <YAxis dataKey="sender" type="category" width={100} />
-            <Tooltip 
+            <ChartTooltip 
               formatter={(value, name) => [
                 value,
                 name === 'engagementScore' ? 'Engagement Score' : 'Media Shared'
@@ -397,14 +413,14 @@ export default function MediaEngagementChart() {
     <div className="space-y-6">
       {/* Hourly Media Activity */}
       <div className="bg-white rounded-lg border p-4">
-        <h4 className="text-lg font-semibold mb-4">⏰ Media Sharing & Engagement by Hour</h4>
+        <h4 className="text-lg font-semibold mb-4">? Media Sharing & Engagement by Hour</h4>
         <ResponsiveContainer width="100%" height={400}>
           <LineChart data={hourlyData}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="hour" />
             <YAxis yAxisId="left" />
             <YAxis yAxisId="right" orientation="right" />
-            <Tooltip 
+            <ChartTooltip 
               formatter={(value, name) => [
                 name === 'responseRate' ? `${Number(value).toFixed(1)}%` : Number(value).toFixed(1),
                 name === 'mediaCount' ? 'Media Shared' : 
@@ -420,7 +436,7 @@ export default function MediaEngagementChart() {
       {/* Peak Activity Insights */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-lg border p-4">
-          <h5 className="text-lg font-semibold mb-4">📈 Peak Media Sharing Hours</h5>
+          <h5 className="text-lg font-semibold mb-4">?? Peak Media Sharing Hours</h5>
           <div className="space-y-3">
             {hourlyData
               .sort((a, b) => b.mediaCount - a.mediaCount)
@@ -442,7 +458,7 @@ export default function MediaEngagementChart() {
         </div>
 
         <div className="bg-white rounded-lg border p-4">
-          <h5 className="text-lg font-semibold mb-4">🎯 Highest Engagement Hours</h5>
+          <h5 className="text-lg font-semibold mb-4">?? Highest Engagement Hours</h5>
           <div className="space-y-3">
             {hourlyData
               .sort((a, b) => b.responseRate - a.responseRate)
@@ -469,7 +485,7 @@ export default function MediaEngagementChart() {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-xl font-bold text-gray-900 mb-2">📊 Media-Engagement Correlation Analysis</h3>
+        <h3 className="text-xl font-bold text-gray-900 mb-2">?? Media-Engagement Correlation Analysis</h3>
         <p className="text-gray-600 mb-4">
           Analyzing how different media types correlate with engagement and response patterns
         </p>

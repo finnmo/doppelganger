@@ -1,6 +1,8 @@
 /** Aggregate reaction metrics for a selected conversation set from
  *  per-conversation processor output (never from global emoji counts). */
 
+import { isKnownParticipant } from './participantFilter';
+
 export interface ConversationReactionRow {
   conversation_id: string;
   count: number;
@@ -46,7 +48,8 @@ export interface FilteredReactionView {
 export function aggregateReactionsForConversations(
   rows: ConversationReactionRow[],
   selectedIds: string[],
-  messageCountInSelection: number
+  messageCountInSelection: number,
+  participantIndex?: Map<string, Set<string>>
 ): FilteredReactionView {
   const selected = new Set(selectedIds);
   const convs = rows.filter(r => selected.has(r.conversation_id));
@@ -65,6 +68,12 @@ export function aggregateReactionsForConversations(
       emojiTotals.set(emoji, (emojiTotals.get(emoji) || 0) + count);
     }
     for (const s of conv.senders || []) {
+      if (
+        participantIndex &&
+        !isKnownParticipant(participantIndex, conv.conversation_id, s.sender)
+      ) {
+        continue;
+      }
       let agg = senderAgg.get(s.sender);
       if (!agg) {
         agg = {

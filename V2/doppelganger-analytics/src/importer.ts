@@ -173,18 +173,22 @@ export async function importArchive(sourcePath: string): Promise<void> {
         const videos = msg.attachments.filter(a => a.kind === 'video');
         const audio = msg.attachments.filter(a => a.kind === 'audio');
 
+        const synthetic = msg.text == null ? syntheticContent(msg) : null;
+        const content = msg.text ?? synthetic;
+        const isSystem = msg.isSystem || synthetic != null;
+
         const result = insertMessage.run({
           conversation_id: msg.conversation_id,
           sender: msg.sender,
           timestamp_ms: msg.timestampMs,
-          content: msg.text ?? syntheticContent(msg),
+          content,
           has_photos: photos.length > 0 ? 1 : 0,
           has_videos: videos.length > 0 ? 1 : 0,
           has_audio: audio.length > 0 ? 1 : 0,
           has_share: msg.share ? 1 : 0,
           share_link: msg.share?.link ?? null,
           source: msg.source,
-          is_system: msg.isSystem ? 1 : 0
+          is_system: isSystem ? 1 : 0
         });
 
         const messageId = result.lastInsertRowid;

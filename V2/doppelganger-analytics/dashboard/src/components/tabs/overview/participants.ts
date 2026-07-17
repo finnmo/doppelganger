@@ -3,6 +3,7 @@
 // messages_by_sender — never global totals divided by a filtered size.
 
 import { computeEmojiChampions } from '@/lib/overviewAggregate';
+import { filterMessagesBySender, isKnownParticipant, buildParticipantIndex } from '@/lib/participantFilter';
 import type { EmojiMetricsData, EngagementData, RawConversationData, RawMediaData, TurnTakingData } from './types';
 
 export interface ParticipantAnalyticsData {
@@ -38,10 +39,12 @@ export function computeParticipantAnalytics(
     selectedIds.includes(c.conversation_id)
   );
 
+  const participantIndex = buildParticipantIndex(selectedConvs);
+
   // Aggregate per-sender message counts from selected conversations only.
   const messagesBySender = new Map<string, number>();
   for (const conv of selectedConvs) {
-    const bySender = conv.messages_by_sender;
+    const bySender = filterMessagesBySender(conv.messages_by_sender, conv.participants);
     if (bySender && Object.keys(bySender).length > 0) {
       for (const [sender, count] of Object.entries(bySender)) {
         messagesBySender.set(sender, (messagesBySender.get(sender) || 0) + count);
@@ -58,8 +61,7 @@ export function computeParticipantAnalytics(
 
   const messageContributors = Array.from(messagesBySender.entries())
     .map(([participant, total_messages]) => ({ participant, total_messages }))
-    .sort((a, b) => b.total_messages - a.total_messages)
-    .slice(0, 5);
+    .sort((a, b) => b.total_messages - a.total_messages);
 
   // Fast responders: prefer turn-taking per selected conversation; else
   // engagement scores for participants present in the selection.
@@ -69,6 +71,7 @@ export function computeParticipantAnalytics(
     for (const pattern of turnTakingData.conversation_patterns) {
       if (!selectedIds.includes(pattern.conversation_id)) continue;
       for (const p of pattern.participants) {
+        if (!isKnownParticipant(participantIndex, pattern.conversation_id, p.participant)) continue;
         if (p.avg_response_time <= 0) continue;
         const entry = responseByParticipant.get(p.participant) || { sum: 0, n: 0 };
         entry.sum += p.avg_response_time;
@@ -78,14 +81,12 @@ export function computeParticipantAnalytics(
     }
     fastResponders = Array.from(responseByParticipant.entries())
       .map(([participant, { sum, n }]) => ({ participant, avg_response_time: sum / n }))
-      .sort((a, b) => a.avg_response_time - b.avg_response_time)
-      .slice(0, 5);
+      .sort((a, b) => a.avg_response_time - b.avg_response_time);
   } else if (engagementData?.participant_scores) {
     const present = new Set(messagesBySender.keys());
     fastResponders = engagementData.participant_scores
       .filter(p => present.has(p.participant) && p.avg_response_time > 0)
       .sort((a, b) => a.avg_response_time - b.avg_response_time)
-      .slice(0, 5)
       .map(p => ({ participant: p.participant, avg_response_time: p.avg_response_time }));
   }
 
@@ -95,6 +96,7 @@ export function computeParticipantAnalytics(
     const mediaBySender = new Map<string, { photos: number; videos: number; attachments: number; total: number }>();
     for (const row of mediaData.sender_media_data) {
       if (!selectedIds.includes(row.conversation_id)) continue;
+      if (!isKnownParticipant(participantIndex, row.conversation_id, row.sender)) continue;
       const entry = mediaBySender.get(row.sender) || { photos: 0, videos: 0, attachments: 0, total: 0 };
       entry.photos += row.photo_count;
       entry.videos += row.video_count;
@@ -104,14 +106,13 @@ export function computeParticipantAnalytics(
     }
     mediaSharers = Array.from(mediaBySender.entries())
       .map(([sender, mediaShared]) => ({ sender, mediaShared }))
-      .sort((a, b) => b.mediaShared.total - a.mediaShared.total)
-      .slice(0, 5);
+      .sort((a, b) => b.mediaShared.total - a.mediaShared.total);
   }
 
   // Emoji champions from honest per-conversation per-sender counts; empty when
   // the emoji dataset is unavailable (pre-regeneration exports).
   const emojiUsers = emojiData
-    ? computeEmojiChampions(emojiData.senderEmojis, selectedIds)
+    ? computeEmojiChampions(emojiData.senderEmojis, selectedIds, selectedConvs, 50)
     : [];
 
   return { messageContributors, emojiUsers, mediaSharers, fastResponders };

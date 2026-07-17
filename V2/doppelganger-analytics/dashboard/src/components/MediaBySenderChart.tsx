@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { useConversationFilter } from '@/contexts/ConversationContext';
+import { ChartTooltip } from '@/components/ui/ChartTooltip';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell } from 'recharts';
+import { useParticipantScope } from '@/hooks/useParticipantScope';
 
 interface SenderMediaData {
   conversation_id: string;
@@ -23,7 +24,7 @@ interface ProcessedSenderData {
 export function MediaBySenderChart() {
   const [data, setData] = useState<ProcessedSenderData[]>([]);
   const [loading, setLoading] = useState(true);
-  const { selectedConversations, isFiltered } = useConversationFilter();
+  const { filterScopedRows, scopeConversationIds } = useParticipantScope();
 
   useEffect(() => {
     const loadData = async () => {
@@ -32,13 +33,7 @@ export function MediaBySenderChart() {
         const mediaData = await response.json();
         
         let senderMediaData: SenderMediaData[] = mediaData.sender_media_data || [];
-        
-        // Filter by selected conversations if filtering is active
-        if (isFiltered && selectedConversations.length > 0) {
-          senderMediaData = senderMediaData.filter(item => 
-            selectedConversations.includes(item.conversation_id)
-          );
-        }
+        senderMediaData = filterScopedRows(senderMediaData, { senderKey: 'sender' });
         
         // Aggregate filtered data by sender
         const senderTotals = new Map<string, {
@@ -92,7 +87,7 @@ export function MediaBySenderChart() {
     };
 
     loadData();
-  }, [selectedConversations, isFiltered]);
+  }, [filterScopedRows, scopeConversationIds]);
 
   if (loading) {
     return <div className="flex items-center justify-center h-64">Loading...</div>;
@@ -109,7 +104,7 @@ export function MediaBySenderChart() {
     return typeColors[topType.toLowerCase()] || '#6b7280';
   };
 
-  const formatTooltip = (value: number, data: ProcessedSenderData) => {
+  const format = (value: number, data: ProcessedSenderData) => {
     const mediaTypes = Object.entries(data.media_types)
       .sort(([,a], [,b]) => b - a)
       .slice(0, 3)
@@ -143,12 +138,6 @@ export function MediaBySenderChart() {
         </div>
       </div>
       
-      {isFiltered && (
-        <div className="mb-2 text-center text-xs text-blue-600">
-          Filtered across {selectedConversations.length} selected conversation{selectedConversations.length !== 1 ? 's' : ''}
-        </div>
-      )}
-      
       <div className="min-h-0 flex-1">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
@@ -170,12 +159,12 @@ export function MediaBySenderChart() {
             fontSize={12}
             tickFormatter={(value) => value.toLocaleString()}
           />
-          <Tooltip 
+          <ChartTooltip 
             content={({ active, payload }) => {
               if (active && payload && payload.length) {
                 return (
                   <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
-                    {formatTooltip(Number(payload[0].value), payload[0].payload)}
+                    {format(Number(payload[0].value), payload[0].payload)}
                   </div>
                 );
               }

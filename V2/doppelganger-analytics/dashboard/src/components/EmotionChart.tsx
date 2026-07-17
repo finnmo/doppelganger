@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { useConversationFilter } from '@/contexts/ConversationContext';
+import { ChartTooltip } from '@/components/ui/ChartTooltip';
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { useParticipantScope } from '@/hooks/useParticipantScope';
 import { AlertCircle, Smile } from 'lucide-react';
 
 interface EmotionData {
@@ -35,7 +36,7 @@ export function EmotionChart() {
   const [data, setData] = useState<EmotionTotals[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { selectedConversations, isFiltered } = useConversationFilter();
+  const { filterScopedRows, isFiltered, scopeConversationIds } = useParticipantScope();
 
   useEffect(() => {
     const loadData = async () => {
@@ -53,13 +54,12 @@ export function EmotionChart() {
         if (!Array.isArray(emotionData)) {
           throw new Error('Invalid emotion data format');
         }
-        
-        // Filter by selected conversations if filtering is active
-        if (isFiltered && selectedConversations.length > 0) {
-          emotionData = emotionData.filter(emotion => 
-            emotion.conversation_id && selectedConversations.includes(emotion.conversation_id)
-          );
-        }
+
+        emotionData = filterScopedRows(
+          emotionData.filter(
+            (e): e is EmotionData & { conversation_id: string } => !!e.conversation_id
+          )
+        );
         
         if (emotionData.length === 0) {
           setData([]);
@@ -111,7 +111,7 @@ export function EmotionChart() {
     };
 
     loadData();
-  }, [selectedConversations, isFiltered]);
+  }, [filterScopedRows, scopeConversationIds]);
 
   if (loading) {
     return (
@@ -190,8 +190,8 @@ export function EmotionChart() {
   };
 
   return (
-    <div className="h-80">
-    <div className="h-64">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="min-h-0 flex-1">
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
@@ -212,7 +212,7 @@ export function EmotionChart() {
               />
             ))}
           </Pie>
-            <Tooltip 
+            <ChartTooltip 
               formatter={(value, _name, item) => {
                 const total = data.reduce((sum, row) => sum + row.total, 0);
                 const pct = total > 0 ? (Number(value) / total) * 100 : 0;
@@ -230,9 +230,8 @@ export function EmotionChart() {
         </PieChart>
       </ResponsiveContainer>
       </div>
-      
-      {/* Legend */}
-      <div className="mt-4 flex flex-wrap justify-center gap-4 text-sm">
+
+      <div className="mt-1 grid shrink-0 grid-cols-2 justify-items-center gap-x-3 gap-y-0.5 text-xs">
         {data.map((entry, index) => (
           <div key={index} className="flex items-center gap-2">
             <div 

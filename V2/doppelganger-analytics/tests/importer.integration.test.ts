@@ -64,15 +64,16 @@ describe('importArchive (platform-neutral pipeline)', () => {
 
     expect(messages).toHaveLength(2);
     expect(messages.every(m => m.source === 'instagram')).toBe(true);
-    expect(messages.every(m => m.is_system === 0)).toBe(true);
     expect(messages.every(m => m.conversation_id === 'instagram:alice_123')).toBe(true);
 
-    // Attachment-only message gets synthetic content and the media flag.
+    // Attachment-only message gets synthetic content, media flag, and is_system.
     expect(messages[0].sender).toBe('Bob');
     expect(messages[0].has_photos).toBe(1);
     expect(messages[0].content).toBe('Bob sent 1 photo');
+    expect(messages[0].is_system).toBe(1);
 
     expect(messages[1].content).toBe('hello there');
+    expect(messages[1].is_system).toBe(0);
 
     // Photo row and decoded reaction present.
     const photoCount = (db.prepare('SELECT COUNT(*) AS n FROM message_photos').get() as { n: number }).n;

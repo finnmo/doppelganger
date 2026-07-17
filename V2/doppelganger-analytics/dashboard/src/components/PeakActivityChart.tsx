@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
-import { useConversationFilter } from '@/contexts/ConversationContext';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
+import { ChartTooltip } from '@/components/ui/ChartTooltip';
+import { useParticipantScope } from '@/hooks/useParticipantScope';
 
 interface ActivityData {
   conversation_id: string;
@@ -64,22 +65,17 @@ export function PeakActivityChart() {
   });
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'hourly' | 'daily'>('hourly');
-  const { selectedConversations, isFiltered } = useConversationFilter();
+  const { filterScopedRows, isFiltered, scopeConversationIds } = useParticipantScope();
 
   useEffect(() => {
     const loadData = async () => {
       try {
         const activeHoursResponse = await fetch('/data/activeHours.json');
         let activeHoursData: ActivityData[] = await activeHoursResponse.json();
+        activeHoursData = filterScopedRows(activeHoursData, { senderKey: 'sender' });
 
         if (!Array.isArray(activeHoursData)) {
           activeHoursData = [];
-        }
-
-        if (isFiltered && selectedConversations.length > 0) {
-          activeHoursData = activeHoursData.filter((item) =>
-            selectedConversations.includes(item.conversation_id)
-          );
         }
 
         const hourlyTotals = activeHoursData.reduce((acc, item) => {
@@ -174,7 +170,7 @@ export function PeakActivityChart() {
     };
 
     loadData();
-  }, [selectedConversations, isFiltered]);
+  }, [filterScopedRows, scopeConversationIds, isFiltered]);
 
   const getDayColor = (day: string): string => {
     if (peakInfo.peak_days.includes(day)) return '#ef4444';
@@ -261,7 +257,7 @@ export function PeakActivityChart() {
                 fontSize={12}
                 tickFormatter={(value) => value.toLocaleString()}
               />
-              <Tooltip
+              <ChartTooltip
                 formatter={(value, name, props) => [
                   Number(value).toLocaleString() + ' messages',
                   `${props.payload.label} Activity`
@@ -290,7 +286,7 @@ export function PeakActivityChart() {
                 fontSize={12}
                 tickFormatter={(value) => value.toLocaleString()}
               />
-              <Tooltip
+              <ChartTooltip
                 formatter={(value) => [Number(value).toLocaleString() + ' messages', 'Activity']}
               />
               <Bar dataKey="count" radius={[4, 4, 0, 0]}>

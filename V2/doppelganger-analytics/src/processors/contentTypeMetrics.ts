@@ -1,5 +1,6 @@
 import { getDb, closeDb } from '../db/client.js';
 import { decodeInstagramUnicode, extractEmojis, detectReaction } from '../utils/unicodeDecoder.js';
+import { trimMessageSnippet, isSystemMessage } from '../utils/messageFilters.js';
 import chalk from 'chalk';
 import { progressReporter } from '../utils/progressReporter.js';
 import { writeDashData } from '../utils/output.js';
@@ -10,6 +11,11 @@ interface ContentTypeData {
   totalLength: number;
   examples: string[];
   senders: Set<string>;
+  representativeExample?: {
+    text: string;
+    sender: string;
+    conversation_id: string;
+  };
 }
 
 export function classifyMessage(content: string, hasMedia: boolean): string {
@@ -40,6 +46,8 @@ export function classifyMessage(content: string, hasMedia: boolean): string {
   return 'long_text';
 }
 
+const NON_EXAMPLE_TYPES = new Set(['reaction', 'media_notification', 'call_event', 'system_event']);
+
 interface ContentTypeResult {
   conversation_id: string;
   type: string;
@@ -48,14 +56,18 @@ interface ContentTypeResult {
   examples: string[];
   avgLength: number;
   uniqueSenders: number;
+  representativeExample?: {
+    text: string;
+    sender: string;
+    conversation_id: string;
+  };
 }
 
 export async function computeContentTypeMetrics(): Promise<void> {
   progressReporter.start('Computing content type metrics...');
   const db = await getDb();
-  
+
   try {
-    // Get all messages with content analysis
     const messages = db.prepare(`
       SELECT
         id,
@@ -64,7 +76,8 @@ export async function computeContentTypeMetrics(): Promise<void> {
         conversation_id,
         timestamp_ms,
         has_photos,
-        has_videos
+        has_videos,
+        is_system
       FROM messages
       WHERE content IS NOT NULL
       ORDER BY conversation_id, id DESC
@@ -76,15 +89,23 @@ export async function computeContentTypeMetrics(): Promise<void> {
       timestamp_ms: number;
       has_photos: number;
       has_videos: number;
+      is_system: number;
     }>;
 
     progressReporter.update(`Analyzing ${messages.length.toLocaleString()} messages for content types...`);
 
-    // Classify each message once, accumulating everything needed per conversation/type
     const conversationContentTypes = new Map<string, Map<string, ContentTypeData>>();
     const conversationMessageCounts = new Map<string, number>();
+    const representativeExamples: Array<{
+      type: string;
+      text: string;
+      sender: string;
+      conversation_id: string;
+    }> = [];
 
     for (const message of messages) {
+      if (isSystemMessage(message.content, message.is_system)) continue;
+
       const content = decodeInstagramUnicode(message.content.trim());
       const hasMedia = message.has_photos === 1 || message.has_videos === 1;
       const messageType = classifyMessage(content, hasMedia);
@@ -117,9 +138,18 @@ export async function computeContentTypeMetrics(): Promise<void> {
       if (typeData.examples.length < 3) {
         typeData.examples.push(content.length > 100 ? content.substring(0, 100) + '...' : content);
       }
+
+      if (!typeData.representativeExample && !NON_EXAMPLE_TYPES.has(messageType)) {
+        const example = {
+          text: trimMessageSnippet(content, 120),
+          sender: message.sender,
+          conversation_id: message.conversation_id
+        };
+        typeData.representativeExample = example;
+        representativeExamples.push({ type: messageType, ...example });
+      }
     }
 
-    // Generate results per conversation
     const results: ContentTypeResult[] = [];
 
     for (const [conversationId, contentTypes] of conversationContentTypes.entries()) {
@@ -128,17 +158,17 @@ export async function computeContentTypeMetrics(): Promise<void> {
       for (const [type, data] of contentTypes.entries()) {
         results.push({
           conversation_id: conversationId,
-          type: type,
+          type,
           count: data.count,
           percentage: totalMessages > 0 ? (data.count / totalMessages) * 100 : 0,
           examples: data.examples,
           avgLength: data.count > 0 ? Math.round(data.totalLength / data.count) : 0,
-          uniqueSenders: data.senders.size
+          uniqueSenders: data.senders.size,
+          representativeExample: data.representativeExample
         });
       }
     }
 
-    // Sort by conversation, then by count descending
     results.sort((a, b) => {
       if (a.conversation_id !== b.conversation_id) {
         return a.conversation_id.localeCompare(b.conversation_id);
@@ -146,21 +176,19 @@ export async function computeContentTypeMetrics(): Promise<void> {
       return b.count - a.count;
     });
 
-    // Export data
-
-    // Calculate global summary
-    const totalMessages = messages.length;
+    const totalMessages = messages.filter(m => !isSystemMessage(m.content, m.is_system)).length;
     const totalLength = messages.reduce((sum, msg) => sum + msg.content.length, 0);
     const uniqueTypes = new Set(results.map(r => r.type)).size;
 
     const contentTypeData = {
       summary: {
-        totalMessages: totalMessages,
+        totalMessages,
         totalTypes: uniqueTypes,
-        avgMessageLength: Math.round(totalLength / totalMessages),
+        avgMessageLength: totalMessages > 0 ? Math.round(totalLength / totalMessages) : 0,
         totalConversations: conversationContentTypes.size
       },
-      contentTypes: results
+      contentTypes: results,
+      representativeExamples
     };
 
     writeDashData('contentTypeMetrics.json', contentTypeData);
@@ -168,11 +196,11 @@ export async function computeContentTypeMetrics(): Promise<void> {
     progressReporter.success(`Content type metrics computed and exported (${totalMessages.toLocaleString()} messages analyzed).`);
     progressReporter.update(`Found ${uniqueTypes} different content types across ${conversationContentTypes.size} conversations`);
     progressReporter.update(`Total records: ${results.length}`);
-    
+
   } catch (error) {
     console.error(chalk.red('❌ Error computing content type metrics:'), error);
     throw error;
   } finally {
     closeDb(db);
   }
-} 
+}

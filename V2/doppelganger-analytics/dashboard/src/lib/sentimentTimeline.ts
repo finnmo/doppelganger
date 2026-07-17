@@ -2,6 +2,15 @@
 // per-conversation daily rows (sentimentDailyByConversation.json). Rows store
 // sums so merging conversations stays exact: merged average = Σsums / Σcounts.
 
+import {
+  buildParticipantIndex,
+  filterRowsBySelection,
+  isKnownParticipant,
+  type ConversationParticipantRecord,
+} from './participantFilter';
+
+export type { ConversationParticipantRecord };
+
 export interface SentimentDailyRow {
   conversation_id: string;
   date: string;
@@ -69,7 +78,7 @@ export function buildTimelineFromDailyRows(
       avgNegative: round3(day.negativeSum / day.count),
       avgNeutral: round3(day.neutralSum / day.count),
       messageCount: day.count,
-      sentiment: avgCompound > 0.1 ? 'positive' : avgCompound < -0.1 ? 'negative' : 'neutral'
+      sentiment: avgCompound > 0.1 ? 'positive' : avgCompound < -0.1 ? 'negative' : 'neutral',
     });
   }
 
@@ -80,9 +89,13 @@ export function buildTimelineFromDailyRows(
 export function buildSenderTimelineFromDailyRows(
   rows: SentimentDailyBySenderRow[],
   selectedConversations: string[],
-  sender: string
+  sender: string,
+  conversations: ConversationParticipantRecord[] = []
 ): SentimentTimePoint[] {
-  const selected = new Set(selectedConversations);
+  const participantIndex = buildParticipantIndex(conversations);
+  const scoped = filterRowsBySelection(rows, selectedConversations, participantIndex, {
+    senderKey: 'sender',
+  }).filter((row) => row.sender === sender);
 
   const byDate = new Map<string, {
     compoundSum: number;
@@ -92,9 +105,7 @@ export function buildSenderTimelineFromDailyRows(
     count: number;
   }>();
 
-  for (const row of rows) {
-    if (row.sender !== sender) continue;
-    if (selected.size > 0 && !selected.has(row.conversation_id)) continue;
+  for (const row of scoped) {
     let day = byDate.get(row.date);
     if (!day) {
       day = { compoundSum: 0, positiveSum: 0, negativeSum: 0, neutralSum: 0, count: 0 };
@@ -119,13 +130,15 @@ export function buildSenderTimelineFromDailyRows(
       avgNegative: round3(day.negativeSum / day.count),
       avgNeutral: round3(day.neutralSum / day.count),
       messageCount: day.count,
-      sentiment: avgCompound > 0.1 ? 'positive' : avgCompound < -0.1 ? 'negative' : 'neutral'
+      sentiment: avgCompound > 0.1 ? 'positive' : avgCompound < -0.1 ? 'negative' : 'neutral',
     });
   }
 
   timeline.sort((a, b) => a.timestamp - b.timestamp);
   return timeline;
 }
+
+export { isKnownParticipant };
 
 export function formatFullDate(dateStr: string): string {
   if (!dateStr || dateStr === 'N/A') return dateStr;
@@ -151,7 +164,7 @@ export function summarizeTimeline(timeline: SentimentTimePoint[]): TimelineSumma
       dateRange: { start: 'N/A', end: 'N/A' },
       avgDailySentiment: 0,
       mostPositiveDay: null,
-      mostNegativeDay: null
+      mostNegativeDay: null,
     };
   }
 
@@ -162,7 +175,13 @@ export function summarizeTimeline(timeline: SentimentTimePoint[]): TimelineSumma
     avgDailySentiment: round3(
       timeline.reduce((sum, day) => sum + day.avgCompound, 0) / timeline.length
     ),
-    mostPositiveDay: timeline.reduce((max, day) => (day.avgCompound > max.avgCompound ? day : max), timeline[0]),
-    mostNegativeDay: timeline.reduce((min, day) => (day.avgCompound < min.avgCompound ? day : min), timeline[0])
+    mostPositiveDay: timeline.reduce(
+      (max, day) => (day.avgCompound > max.avgCompound ? day : max),
+      timeline[0]
+    ),
+    mostNegativeDay: timeline.reduce(
+      (min, day) => (day.avgCompound < min.avgCompound ? day : min),
+      timeline[0]
+    ),
   };
 }

@@ -119,3 +119,9 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
 }
+
+/* Keep Recharts hover labels inside the viewport on narrow / right-edge cards */
+.recharts-tooltip-wrapper {
+  max-width: min(20rem, calc(100vw - 1rem)) !important;
+  white-space: normal;
+}

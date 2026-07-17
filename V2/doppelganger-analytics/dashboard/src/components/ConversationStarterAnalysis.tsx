@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { MessageSquarePlus, Clock, Trophy } from 'lucide-react';
-import { useConversationFilter } from '@/contexts/ConversationContext';
+import { useParticipantScope } from '@/hooks/useParticipantScope';
 
 interface StarterPattern {
   starter_sender: string;
@@ -122,7 +122,7 @@ function rebuildPatternsFromStarters(starters: ConversationStarter[]): {
 export function ConversationStarterAnalysis() {
   const [data, setData] = useState<StarterData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const { selectedConversations, isFiltered } = useConversationFilter();
+  const { filterScopedRows, scopeConversationIds, isFiltered } = useParticipantScope();
 
   useEffect(() => {
     const loadData = async () => {
@@ -130,21 +130,25 @@ export function ConversationStarterAnalysis() {
         const response = await fetch('/data/conversationStarterAnalysis.json');
         const starterData: StarterData = await response.json();
 
-        if (isFiltered && selectedConversations.length > 0) {
-          const selected = new Set(selectedConversations);
-          const filteredStarters = (starterData.conversation_starters || []).filter((s) =>
-            selected.has(s.conversation_id)
-          );
-          const rebuilt = rebuildPatternsFromStarters(filteredStarters);
-          setData({
-            ...starterData,
-            conversation_starters: filteredStarters,
-            starter_patterns: rebuilt.starter_patterns,
-            summary: rebuilt.summary
-          });
-        } else {
-          setData(starterData);
-        }
+        const scopedStarters = filterScopedRows(
+          (starterData.conversation_starters || []).map((s) => ({
+            ...s,
+            sender: s.starter_sender,
+          })),
+          { senderKey: 'sender' }
+        ).map((starter) => {
+          const { sender, ...rest } = starter;
+          void sender;
+          return rest;
+        });
+
+        const rebuilt = rebuildPatternsFromStarters(scopedStarters);
+        setData({
+          ...starterData,
+          conversation_starters: scopedStarters,
+          starter_patterns: rebuilt.starter_patterns,
+          summary: rebuilt.summary,
+        });
       } catch (error) {
         console.error('Error loading conversation starter data:', error);
         setData(null);
@@ -154,7 +158,7 @@ export function ConversationStarterAnalysis() {
     };
 
     loadData();
-  }, [selectedConversations, isFiltered]);
+  }, [filterScopedRows, scopeConversationIds]);
 
   if (isLoading) {
     return (
@@ -182,7 +186,7 @@ export function ConversationStarterAnalysis() {
 
   const topStarters = data.starter_patterns.slice(0, 6);
   const totalSessions = data.summary.total_starters;
-  const singleConversation = isFiltered && selectedConversations.length === 1;
+  const singleConversation = isFiltered && scopeConversationIds.length === 1;
   const headerLabel = singleConversation
     ? `${totalSessions.toLocaleString()} chat sessions detected (4h+ gap between messages)`
     : `${totalSessions.toLocaleString()} chat sessions across ${data.summary.total_conversations.toLocaleString()} conversations`;

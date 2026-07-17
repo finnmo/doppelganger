@@ -10,13 +10,7 @@ import { buildBubbleHabits, type BubbleHabits } from './bubbleHabits.js';
 import { buildTurnTakingHabits, type TurnTakingHabits } from './turnTakingHabits.js';
 import { buildSharedTimeline, type SharedTimeline } from './sharedTimeline.js';
 import { extractReplyPairs } from './replyTurns.js';
-
-const STOP_WORDS = new Set([
-  'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with',
-  'is', 'it', 'this', 'that', 'i', 'you', 'he', 'she', 'we', 'they', 'me', 'my',
-  'your', 'was', 'are', 'be', 'have', 'has', 'had', 'do', 'did', 'so', 'if', 'not',
-  'just', 'like', 'yeah', 'ok', 'okay', 'lol', 'haha', 'um', 'uh'
-]);
+import { STOP_WORDS, buildConversationNameBlocklist } from '../utils/messageFilters.js';
 
 interface SenderRow {
   sender: string;
@@ -207,6 +201,13 @@ export async function computePersonaMetrics(): Promise<void> {
       console.log(`  Inferred account holder (you): ${selfSender}`);
     }
 
+    const participantRows = db.prepare(`
+      SELECT DISTINCT sender, conversation_id
+      FROM messages
+      WHERE sender IS NOT NULL AND TRIM(sender) != ''
+    `).all() as Array<{ sender: string; conversation_id: string }>;
+    const nameBlocklist = buildConversationNameBlocklist(participantRows);
+
     const profiles: PersonaStyleProfile[] = [];
 
     let processed = 0;
@@ -215,15 +216,16 @@ export async function computePersonaMetrics(): Promise<void> {
         console.log(`  Persona profiles: ${processed}/${senders.length} senders`);
       }
       const words = db.prepare(`
-        SELECT m.content
+        SELECT m.content, m.conversation_id
         FROM messages m
         WHERE m.sender = ? AND m.is_system = 0 AND m.content IS NOT NULL
-      `).all(sender.sender) as Array<{ content: string }>;
+      `).all(sender.sender) as Array<{ content: string; conversation_id: string }>;
 
       const freq = new Map<string, number>();
       for (const row of words) {
+        const blocked = nameBlocklist.get(row.conversation_id) ?? new Set<string>();
         for (const token of row.content.toLowerCase().match(/[a-z']{3,}/g) ?? []) {
-          if (STOP_WORDS.has(token)) continue;
+          if (STOP_WORDS.has(token) || blocked.has(token)) continue;
           freq.set(token, (freq.get(token) ?? 0) + 1);
         }
       }

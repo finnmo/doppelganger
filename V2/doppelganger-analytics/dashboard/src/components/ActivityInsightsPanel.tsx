@@ -1,9 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Clock, Zap, Sun } from 'lucide-react';
 import { useDashData } from '@/hooks/useDashData';
-import { useConversationFilter } from '@/contexts/ConversationContext';
+import { useParticipantScope } from '@/hooks/useParticipantScope';
 
 interface ActiveHour {
   conversation_id: string;
@@ -38,14 +38,20 @@ const DAY_PARTS = [
 export function ActivityInsightsPanel() {
   const { data: activeHours } = useDashData<ActiveHour[]>('activeHours.json');
   const { data: latency } = useDashData<LatencyBucket[]>('replyLatencyDistribution.json');
-  const { selectedConversations } = useConversationFilter();
+  const { filterScopedRows } = useParticipantScope();
 
-  const selected = new Set(selectedConversations);
+  const scopedActiveHours = useMemo(
+    () => filterScopedRows(activeHours || [], { senderKey: 'sender' }),
+    [activeHours, filterScopedRows]
+  );
+  const scopedLatency = useMemo(
+    () => filterScopedRows(latency || []),
+    [latency, filterScopedRows]
+  );
 
-  // Hourly totals for the selected conversation(s)
+  // Hourly totals for the selected conversation(s), participants only
   const hourTotals = new Array(24).fill(0);
-  for (const row of activeHours || []) {
-    if (!selected.has(row.conversation_id)) continue;
+  for (const row of scopedActiveHours) {
     hourTotals[row.hour] += row.count;
   }
   const totalActivity = hourTotals.reduce((a, b) => a + b, 0);
@@ -70,8 +76,7 @@ export function ActivityInsightsPanel() {
 
   // Response-speed split from the latency distribution
   let fast = 0, medium = 0, slow = 0, totalReplies = 0;
-  for (const row of latency || []) {
-    if (!selected.has(row.conversation_id)) continue;
+  for (const row of scopedLatency) {
     totalReplies += row.count;
     if (FAST_BUCKETS.has(row.bucket)) fast += row.count;
     else if (MEDIUM_BUCKETS.has(row.bucket)) medium += row.count;

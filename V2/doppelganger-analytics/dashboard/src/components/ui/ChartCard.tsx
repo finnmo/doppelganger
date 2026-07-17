@@ -1,8 +1,12 @@
 'use client';
 
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { LucideIcon } from 'lucide-react';
+import { Maximize2, X } from 'lucide-react';
 import { InfoTooltip } from '@/components/InfoTooltip';
+import { ChartPlotContext } from '@/components/ui/chartPlotContext';
+import { FULLSCREEN_BODY } from '@/lib/layout';
 import { useTheme } from '@/contexts/ThemeContext';
 
 export type CardAccent =
@@ -17,7 +21,6 @@ export type CardAccent =
   | 'teal'
   | 'slate';
 
-// Static class maps so Tailwind keeps the styles (no dynamic class names).
 const ACCENT_STRIP: Record<CardAccent, string> = {
   blue: 'border-t-blue-400',
   green: 'border-t-green-400',
@@ -54,39 +57,46 @@ interface ChartCardProps {
   title: string;
   icon: LucideIcon;
   accent?: CardAccent;
-  /** Full explanation lives in the tooltip so the card header stays one slim row. */
   tooltip?: ChartCardTooltip;
-  /** Optional controls rendered at the right edge of the header (toggles, etc). */
   actions?: ReactNode;
-  /** Grid placement / sizing from the parent (col-span, row-span, min-h…). */
   className?: string;
-  /** Body sizing, e.g. a fixed chart height or internal scroll. */
   bodyClassName?: string;
   children: ReactNode;
+  /** Optional enhanced view when fullscreen (defaults to children). */
+  fullscreenChildren?: ReactNode;
+  /** When false, hides the expand button (e.g. compact insight panels). */
+  enableFullscreen?: boolean;
 }
 
-/**
- * Dense dashboard card: one slim header row (icon chip, title, info tooltip,
- * optional actions) over a chart/list body. The colored top strip preserves
- * the section color-coding the old banner headers provided, at 3px instead of
- * ~110px, so a full tab fits on one screen.
- */
-export function ChartCard({
+function CardShell({
   title,
-  icon: Icon,
-  accent = 'blue',
+  Icon,
+  accent,
   tooltip,
   actions,
-  className = '',
-  bodyClassName = '',
+  bodyClassName,
   children,
-}: ChartCardProps) {
-  const { themeStyle } = useTheme();
-  const radius = themeStyle === 'modern' ? 'rounded-xl' : 'rounded-lg';
-
+  onFullscreen,
+  onClose,
+  radius,
+  shellClassName = '',
+}: {
+  title: string;
+  Icon: LucideIcon;
+  accent: CardAccent;
+  tooltip?: ChartCardTooltip;
+  actions?: ReactNode;
+  bodyClassName: string;
+  children: ReactNode;
+  onFullscreen?: () => void;
+  onClose?: () => void;
+  radius: string;
+  shellClassName?: string;
+}) {
+  const plotRef = useRef<HTMLDivElement>(null);
   return (
     <section
-      className={`flex min-w-0 flex-col overflow-hidden bg-white ${radius} border border-gray-200 border-t-[3px] ${ACCENT_STRIP[accent]} shadow-sm ${className}`}
+      className={`flex min-h-0 min-w-0 flex-col bg-white ${radius} border border-gray-200 border-t-[3px] ${ACCENT_STRIP[accent]} shadow-sm ${shellClassName}`}
     >
       <header className="flex shrink-0 items-center gap-2 px-3 pb-1.5 pt-2.5 sm:px-4">
         <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${ACCENT_ICON[accent]}`}>
@@ -104,11 +114,130 @@ export function ChartCard({
             iconColor="default"
           />
         )}
-        {actions && <div className="ml-auto flex shrink-0 items-center gap-1.5">{actions}</div>}
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          {onFullscreen && (
+            <button
+              type="button"
+              onClick={onFullscreen}
+              className="rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+              aria-label={`Expand ${title} to fullscreen`}
+            >
+              <Maximize2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+              aria-label="Close fullscreen"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+          {actions}
+        </div>
       </header>
-      {/* `grow` (not flex-1): flex-basis stays `auto`, so explicit body
-          heights like h-64 are respected instead of content-sizing the card. */}
-      <div className={`min-h-0 grow px-3 pb-3 sm:px-4 ${bodyClassName}`}>{children}</div>
+      <ChartPlotContext.Provider value={plotRef}>
+        <div ref={plotRef} data-chart-plot className={`min-h-0 grow overflow-hidden px-3 pb-3 sm:px-4 ${bodyClassName}`}>
+          {children}
+        </div>
+      </ChartPlotContext.Provider>
     </section>
+  );
+}
+
+export function ChartCard({
+  title,
+  icon: Icon,
+  accent = 'blue',
+  tooltip,
+  actions,
+  className = '',
+  bodyClassName = '',
+  children,
+  fullscreenChildren,
+  enableFullscreen = true,
+}: ChartCardProps) {
+  const { themeStyle } = useTheme();
+  const radius = themeStyle === 'modern' ? 'rounded-xl' : 'rounded-lg';
+  const [expanded, setExpanded] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const closeFullscreen = useCallback(() => setExpanded(false), []);
+
+  useEffect(() => {
+    if (!expanded) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeFullscreen();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [expanded, closeFullscreen]);
+
+  const fullscreenBody = fullscreenChildren ?? (
+    <div className="flex h-full min-h-0 flex-col overflow-hidden [&>div]:min-h-0 [&>div]:flex-1">
+      {children}
+    </div>
+  );
+
+  return (
+    <>
+      <CardShell
+        title={title}
+        Icon={Icon}
+        accent={accent}
+        tooltip={tooltip}
+        actions={actions}
+        bodyClassName={bodyClassName}
+        onFullscreen={enableFullscreen ? () => setExpanded(true) : undefined}
+        radius={radius}
+        shellClassName={className}
+      >
+        {children}
+      </CardShell>
+
+      {mounted &&
+        expanded &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[100] flex flex-col bg-black/50 p-2 sm:p-3 md:p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${title} fullscreen`}
+            onClick={closeFullscreen}
+          >
+            <div
+              className="mx-auto flex min-h-0 w-full max-w-[min(100%,1600px)] flex-1 flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <CardShell
+                title={title}
+                Icon={Icon}
+                accent={accent}
+                tooltip={tooltip}
+                actions={actions}
+                bodyClassName={FULLSCREEN_BODY}
+                onClose={closeFullscreen}
+                radius={radius}
+                shellClassName="h-full min-h-0 flex-1"
+              >
+                {fullscreenBody}
+              </CardShell>
+            </div>
+          </div>,
+          document.body
+        )}
+    </>
   );
 }

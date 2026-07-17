@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
-import { useConversationFilter } from '@/contexts/ConversationContext';
+import { ChartTooltip } from '@/components/ui/ChartTooltip';
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from 'recharts';
+import { useParticipantScope } from '@/hooks/useParticipantScope';
 
 interface AttachmentTypeData {
   conversation_id: string;
@@ -33,20 +34,14 @@ const COLORS = {
 export function AttachmentTypeChart() {
   const [data, setData] = useState<AggregatedAttachmentType[]>([]);
   const [loading, setLoading] = useState(true);
-  const { selectedConversations, isFiltered } = useConversationFilter();
+  const { filterScopedRows, scopeConversationIds } = useParticipantScope();
 
   useEffect(() => {
     const loadData = async () => {
       try {
         const response = await fetch('/data/attachmentTypeMetrics.json');
         let attachmentData: AttachmentTypeData[] = await response.json();
-        
-        // Filter by selected conversations if filtering is active
-        if (isFiltered && selectedConversations.length > 0) {
-          attachmentData = attachmentData.filter(item => 
-            selectedConversations.includes(item.conversation_id)
-          );
-        }
+        attachmentData = filterScopedRows(attachmentData);
         
         // Aggregate by attachment type across filtered conversations
         const typeMap = new Map<string, {
@@ -89,7 +84,7 @@ export function AttachmentTypeChart() {
     };
 
     loadData();
-  }, [selectedConversations, isFiltered]);
+  }, [filterScopedRows, scopeConversationIds]);
 
   if (loading) {
     return <div className="flex items-center justify-center h-64">Loading...</div>;
@@ -105,7 +100,7 @@ export function AttachmentTypeChart() {
     return COLORS.other;
   };
 
-  const formatTooltip = (value: number, data: AggregatedAttachmentType) => {
+  const format = (value: number, data: AggregatedAttachmentType) => {
     return [
       <div key="tooltip" className="text-sm">
         <div className="font-semibold capitalize">{data.type}</div>
@@ -161,11 +156,6 @@ export function AttachmentTypeChart() {
         <div className="text-xs text-gray-500">
           Most shared: {data[0]?.type || 'N/A'} ({data[0]?.count.toLocaleString() || 0})
         </div>
-        {isFiltered && (
-          <div className="text-xs text-blue-600 mt-1">
-            Filtered across {selectedConversations.length} selected conversation{selectedConversations.length !== 1 ? 's' : ''}
-          </div>
-        )}
       </div>
       
       <div className="min-h-0 flex-1">
@@ -189,12 +179,12 @@ export function AttachmentTypeChart() {
               />
             ))}
           </Pie>
-          <Tooltip 
+          <ChartTooltip 
             content={({ active, payload }) => {
               if (active && payload && payload.length) {
                 return (
                   <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
-                    {formatTooltip(Number(payload[0].value), payload[0].payload)}
+                    {format(Number(payload[0].value), payload[0].payload)}
                   </div>
                 );
               }
